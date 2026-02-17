@@ -189,8 +189,8 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
           SELECT q.*, 
                  c.company_name as customer_company, c.contact_name, 
                  c.address, c.city, c.rc_number as customer_rc, 
-                 c.nif as customer_nif, c.nis as customer_nis, c.ai as customer_ai,
-                 u.company_name as my_company, u.rc_number, u.nif, u.nis, u.ai, u.phone, u.email
+                 c.ai as customer_ai,
+                 u.company_name as my_company, u.rc_number, u.ai, u.phone, u.email
           FROM quotes q
           JOIN customers c ON q.customer_id = c.id
           JOIN users u ON q.user_id = u.id
@@ -228,10 +228,6 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
       y -= 12;
       page.drawText(`RC: ${quote.rc_number || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
-      page.drawText(`NIF: ${quote.nif || ''}`, { x: margin, y, size: 9, font: fontRegular });
-      y -= 12;
-      page.drawText(`NIS: ${quote.nis || ''}`, { x: margin, y, size: 9, font: fontRegular });
-      y -= 12;
       page.drawText(`AI: ${quote.ai || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
       page.drawText(`Tél: ${quote.phone || ''}`, { x: margin, y, size: 9, font: fontRegular });
@@ -251,14 +247,6 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
       }
       if (quote.customer_rc) {
         page.drawText(`RC: ${quote.customer_rc}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
-        yRight -= 12;
-      }
-      if (quote.customer_nif) {
-        page.drawText(`NIF: ${quote.customer_nif}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
-        yRight -= 12;
-      }
-      if (quote.customer_nis) {
-        page.drawText(`NIS: ${quote.customer_nis}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
         yRight -= 12;
       }
       if (quote.customer_ai) {
@@ -331,5 +319,6 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
 
   return new Response('Not Found', { status: 404 });
 }
+
 
 
