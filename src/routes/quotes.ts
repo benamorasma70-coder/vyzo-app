@@ -106,6 +106,22 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
       });
     }
 
+    // Dans handleQuotes, après la gestion du GET /:id
+    if (request.method === 'PUT' && id) {
+      const body = await request.json()
+      const { status } = body
+      // Vous pourriez aussi permettre la modification d'autres champs
+    
+      const result = await db
+        .prepare('UPDATE quotes SET status = ? WHERE id = ? AND user_id = ?')
+        .bind(status, id, payload.userId)
+        .run()
+    
+      if (result.meta.changes === 0) {
+        return new Response('Not Found', { status: 404 })
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 })
+    }
     // POST /quotes/:id/convert (conversion en facture)
     if (request.method === 'POST' && action === 'convert') {
       // Récupérer le devis
@@ -315,3 +331,4 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
 
   return new Response('Not Found', { status: 404 });
 }
+
