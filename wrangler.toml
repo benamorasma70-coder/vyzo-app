@@ -1,8 +1,10 @@
-name = "vyzo-backend"
+name = "vyzo-app"  # Aligné avec le nom attendu par Cloudflare Pages
 main = "src/index.ts"
 compatibility_date = "2025-02-17"
+compatibility_flags = ["nodejs_compat"]  # Active les modules Node.js
 
 [[d1_databases]]
 binding = "DB"
 database_name = "vyzo-db"
 database_id = "e440018d-5836-442a-af04-0986da128916"  # Remplacer après création
+
