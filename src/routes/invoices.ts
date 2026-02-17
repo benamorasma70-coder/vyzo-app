@@ -99,8 +99,6 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       });
     }
 
-// ... (reste du fichier inchangé jusqu'à la route pdf)
-
     // GET /invoices/:id/pdf (télécharger le PDF réel)
     if (request.method === 'GET' && action === 'pdf') {
       // Récupérer toutes les données nécessaires
@@ -136,7 +134,6 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       // Polices
       const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      const fontSmall = fontRegular;
 
       // Fonction utilitaire pour dessiner une ligne horizontale
       const drawLine = (yPos: number, thickness = 1, color = 0.8) => {
@@ -252,9 +249,23 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       for (const item of items.results) {
         if (y < margin + 50) {
           // Nouvelle page
+          const newPage = pdfDoc.addPage([595.28, 841.89]);
+          // On continue avec la nouvelle page (mais ici on a un problème de scope, on va réassigner page et y)
+          // Pour simplifier, on va réinitialiser page et y sur la nouvelle page
+          // Note : on ne peut pas réassigner 'page' facilement dans cette boucle, mais on peut créer une nouvelle variable
+          // Pour garder le code simple, on va utiliser une approche avec une fonction récursive ou mieux, on va créer une nouvelle page et redessiner les en-têtes.
+          // Je vais simplifier : on va juste ajouter une nouvelle page et continuer avec la même logique en réinitialisant y.
+          // Mais attention à la variable 'page' qui doit être réaffectée. Je vais le faire correctement.
+          // Pour éviter la complexité, je vais garder la version simple sans gestion de saut de page multiple, ou je vais utiliser une fonction.
+          // Je vais plutôt utiliser une approche simple : si on dépasse, on crée une nouvelle page et on continue.
+          // Je vais réaffecter 'page' en utilisant une nouvelle variable, mais comme on est dans une boucle, on peut faire:
+          // let currentPage = page; et si besoin, on change currentPage.
+          // Mais pour ne pas alourdir, je vais laisser le code précédent qui fonctionne (avec 'page' réaffectée).
+          // Dans la version précédente, on avait 'page = pdfDoc.addPage([...])' ce qui réaffecte la variable page.
+          // Je vais faire pareil.
           page = pdfDoc.addPage([595.28, 841.89]);
           y = height - margin;
-          // Répéter les en-têtes sur la nouvelle page
+          // Répéter les en-têtes
           page.drawText('Description', { x: colDesc, y, size: 10, font: fontBold });
           page.drawText('Qté', { x: colQty, y, size: 10, font: fontBold });
           page.drawText('P.U HT', { x: colPrice, y, size: 10, font: fontBold });
@@ -310,3 +321,7 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
         },
       });
     }
+  }
+
+  return new Response('Not Found', { status: 404 });
+}
