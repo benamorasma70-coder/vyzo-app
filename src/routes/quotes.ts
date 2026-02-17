@@ -39,12 +39,21 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
 
     const quoteNumber = await generateNumber(db, payload.userId, 'DEV', 'quotes', 'quote_number');
 
+    // Dans la route POST (création d'un devis)
     const result = await db
       .prepare(
         `INSERT INTO quotes (user_id, quote_number, customer_id, issue_date, expiry_date, notes, total, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'draft')`
       )
-      .bind(payload.userId, quoteNumber, customerId, issueDate, expiryDate, notes, total)
+      .bind(
+        payload.userId,
+        quoteNumber,
+        customerId,
+        issueDate,
+        expiryDate ?? null,   // ← optionnel
+        notes ?? null,         // ← optionnel
+        total
+      )
       .run();
 
     const quoteId = result.meta.last_row_id;
@@ -55,7 +64,14 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
           `INSERT INTO quote_items (quote_id, product_id, description, quantity, unit_price, tax_rate)
            VALUES (?, ?, ?, ?, ?, ?)`
         )
-        .bind(quoteId, item.productId || null, item.description, item.quantity, item.unitPrice, item.taxRate)
+        .bind(
+          quoteId,
+          item.productId ?? null,   // ← important
+          item.description,
+          item.quantity,
+          item.unitPrice,
+          item.taxRate
+        )
         .run();
     }
 
@@ -129,3 +145,4 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
 
   return new Response('Not Found', { status: 404 });
 }
+
