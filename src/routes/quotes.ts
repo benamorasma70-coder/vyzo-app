@@ -1,4 +1,3 @@
-// Similaire à invoices, adapter pour quotes
 import { verifyToken } from '../utils/auth';
 import { generateNumber } from '../utils/numbers';
 
@@ -14,6 +13,7 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
   const id = pathParts[2];
   const action = pathParts[3];
 
+  // GET /quotes (liste)
   if (request.method === 'GET' && !id) {
     const quotes = await db
       .prepare(`
@@ -25,9 +25,12 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
       `)
       .bind(payload.userId)
       .all();
-    return new Response(JSON.stringify(quotes.results), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(quotes.results), {
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
+  // POST /quotes (création)
   if (request.method === 'POST' && !id) {
     const body = await request.json();
     const { customerId, items, issueDate, expiryDate, notes } = body;
@@ -39,7 +42,6 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
 
     const quoteNumber = await generateNumber(db, payload.userId, 'DEV', 'quotes', 'quote_number');
 
-    // Dans la route POST (création d'un devis)
     const result = await db
       .prepare(
         `INSERT INTO quotes (user_id, quote_number, customer_id, issue_date, expiry_date, notes, total, status)
@@ -50,8 +52,8 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
         quoteNumber,
         customerId,
         issueDate,
-        expiryDate ?? null,   // ← optionnel
-        notes ?? null,         // ← optionnel
+        expiryDate ?? null,
+        notes ?? null,
         total
       )
       .run();
@@ -66,7 +68,7 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
         )
         .bind(
           quoteId,
-          item.productId ?? null,   // ← important
+          item.productId ?? null,
           item.description,
           item.quantity,
           item.unitPrice,
@@ -78,7 +80,9 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
     return new Response(JSON.stringify({ id: quoteId }), { status: 201 });
   }
 
+  // Routes avec ID
   if (id) {
+    // GET /quotes/:id (détail)
     if (request.method === 'GET' && !action) {
       const quote = await db
         .prepare(`
@@ -101,31 +105,49 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
       });
     }
 
+    // POST /quotes/:id/convert (conversion en facture)
     if (request.method === 'POST' && action === 'convert') {
-      // Convertir le devis en facture
+      // Récupérer le devis
       const quote = await db
         .prepare('SELECT * FROM quotes WHERE id = ? AND user_id = ?')
         .bind(id, payload.userId)
         .first();
       if (!quote) return new Response('Not Found', { status: 404 });
 
+      // Récupérer les items du devis
       const items = await db
         .prepare('SELECT * FROM quote_items WHERE quote_id = ?')
         .bind(id)
         .all();
 
-      // Créer la facture
+      // Calculer la date d'échéance (30 jours après aujourd'hui)
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 30);
+      const dueDateStr = dueDate.toISOString().split('T')[0];
+
+      // Générer un numéro de facture
       const invoiceNumber = await generateNumber(db, payload.userId, 'FACT', 'invoices', 'invoice_number');
+
+      // Créer la facture
       const invoiceResult = await db
         .prepare(
           `INSERT INTO invoices (user_id, invoice_number, customer_id, issue_date, due_date, notes, total, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, 'draft')`
         )
-        .bind(payload.userId, invoiceNumber, quote.customer_id, new Date().toISOString().split('T')[0], null, quote.notes, quote.total)
+        .bind(
+          payload.userId,
+          invoiceNumber,
+          quote.customer_id,
+          new Date().toISOString().split('T')[0], // issue_date = aujourd'hui
+          dueDateStr,                              // due_date = J+30 (plus de null !)
+          quote.notes ?? null,
+          quote.total
+        )
         .run();
 
       const invoiceId = invoiceResult.meta.last_row_id;
 
+      // Transférer les items
       for (const item of items.results) {
         await db
           .prepare(
@@ -145,4 +167,3 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
 
   return new Response('Not Found', { status: 404 });
 }
-
