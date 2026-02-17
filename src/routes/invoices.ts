@@ -235,11 +235,11 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
         subtotal += net;
         taxTotal += net * (item.tax_rate / 100);
       }
-      page.drawText(`Total HT: ${subtotal.toFixed(2)} DZD`, { x: colTotal - 120, y, size: 10, font: fontBold });
+      page.drawText(`Total HT: ${subtotal.toFixed(2)} TND`, { x: colTotal - 120, y, size: 10, font: fontBold });
       y -= 15;
-      page.drawText(`Total TVA: ${taxTotal.toFixed(2)} DZD`, { x: colTotal - 120, y, size: 10, font: fontBold });
+      page.drawText(`Total TVA: ${taxTotal.toFixed(2)} TND`, { x: colTotal - 120, y, size: 10, font: fontBold });
       y -= 15;
-      page.drawText(`Total TTC: ${invoice.total.toFixed(2)} DZD`, { x: colTotal - 120, y, size: 12, font: fontBold });
+      page.drawText(`Total TTC: ${invoice.total.toFixed(2)} TND`, { x: colTotal - 120, y, size: 12, font: fontBold });
 
       if (invoice.notes) {
         y -= 25;
@@ -260,4 +260,5 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
   return new Response('Not Found', { status: 404 });
 }
+
 
