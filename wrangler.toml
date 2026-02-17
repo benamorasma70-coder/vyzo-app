@@ -1,0 +1,8 @@
+name = "vyzo-backend"
+main = "src/index.ts"
+compatibility_date = "2025-02-17"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vyzo-db"
+database_id = "e440018d-5836-442a-af04-0986da128916"  # Remplacer après création
