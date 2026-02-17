@@ -127,8 +127,8 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
           SELECT d.*, 
                  c.company_name as customer_company, c.contact_name, 
                  c.address, c.city, c.rc_number as customer_rc, 
-                 c.nif as customer_nif, c.nis as customer_nis, c.ai as customer_ai,
-                 u.company_name as my_company, u.rc_number, u.nif, u.nis, u.ai, u.phone, u.email
+                 c.ai as customer_ai,
+                 u.company_name as my_company, u.rc_number, u.ai, u.phone, u.email
           FROM deliveries d
           JOIN customers c ON d.customer_id = c.id
           JOIN users u ON d.user_id = u.id
@@ -157,7 +157,7 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
       // En-tête
       page.drawText('BON DE LIVRAISON', { x: margin, y, size: 24, font: fontBold });
       page.drawText(`N° ${delivery.delivery_number}`, { x: width - margin - 100, y, size: 14, font: fontBold });
-      y -= 30;
+      y -= 35;
 
       // Informations
       page.drawText('Émetteur :', { x: margin, y, size: 10, font: fontBold });
@@ -166,11 +166,7 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
       y -= 12;
       page.drawText(`RC: ${delivery.rc_number || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
-      page.drawText(`NIF: ${delivery.nif || ''}`, { x: margin, y, size: 9, font: fontRegular });
-      y -= 12;
-      page.drawText(`NIS: ${delivery.nis || ''}`, { x: margin, y, size: 9, font: fontRegular });
-      y -= 12;
-      page.drawText(`AI: ${delivery.ai || ''}`, { x: margin, y, size: 9, font: fontRegular });
+      page.drawText(`MT: ${delivery.ai || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
       page.drawText(`Tél: ${delivery.phone || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
@@ -191,16 +187,8 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
         page.drawText(`RC: ${delivery.customer_rc}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
         yRight -= 12;
       }
-      if (delivery.customer_nif) {
-        page.drawText(`NIF: ${delivery.customer_nif}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
-        yRight -= 12;
-      }
-      if (delivery.customer_nis) {
-        page.drawText(`NIS: ${delivery.customer_nis}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
-        yRight -= 12;
-      }
       if (delivery.customer_ai) {
-        page.drawText(`AI: ${delivery.customer_ai}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
+        page.drawText(`MT: ${delivery.customer_ai}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
         yRight -= 12;
       }
 
@@ -208,7 +196,7 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
 
       // Date de livraison
       page.drawText(`Date de livraison : ${delivery.delivery_date}`, { x: margin, y, size: 10, font: fontRegular });
-      y -= 25;
+      y -= 35;
 
       // Tableau
       const colDesc = margin;
@@ -269,5 +257,6 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
 
   return new Response('Not Found', { status: 404 });
 }
+
 
 
