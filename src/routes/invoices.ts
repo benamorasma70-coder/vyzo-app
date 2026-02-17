@@ -99,6 +99,8 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       });
     }
 
+// ... (reste du fichier inchangé jusqu'à la route pdf)
+
     // GET /invoices/:id/pdf (télécharger le PDF réel)
     if (request.method === 'GET' && action === 'pdf') {
       // Récupérer toutes les données nécessaires
@@ -126,107 +128,177 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
       // Création du PDF
       const pdfDoc = await PDFDocument.create();
-      let page = pdfDoc.addPage([595, 842]); // A4
+      const page = pdfDoc.addPage([595.28, 841.89]); // A4
       const { width, height } = page.getSize();
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const margin = 50;
+      let y = height - margin;
 
-      let y = height - 50;
+      // Polices
+      const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const fontSmall = fontRegular;
 
-      // En-tête
-      page.drawText('FACTURE', { x: 50, y, size: 20, font: boldFont });
+      // Fonction utilitaire pour dessiner une ligne horizontale
+      const drawLine = (yPos: number, thickness = 1, color = 0.8) => {
+        page.drawLine({
+          start: { x: margin, y: yPos },
+          end: { x: width - margin, y: yPos },
+          thickness,
+          color: rgb(color, color, color),
+        });
+      };
+
+      // En-tête : titre et numéro
+      page.drawText('FACTURE', {
+        x: margin,
+        y,
+        size: 24,
+        font: fontBold,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      page.drawText(`N° ${invoice.invoice_number}`, {
+        x: width - margin - 100,
+        y,
+        size: 14,
+        font: fontBold,
+        color: rgb(0.3, 0.3, 0.3),
+      });
       y -= 30;
 
-      // Informations de l'entreprise
-      page.drawText(`${invoice.my_company || ''}`, { x: 50, y, size: 12, font: boldFont });
+      drawLine(y);
+      y -= 20;
+
+      // Coordonnées pour les colonnes
+      const colLeft = margin;
+      const colRight = width / 2 + 20;
+
+      // Informations de l'entreprise (à gauche)
+      page.drawText('Émetteur :', { x: colLeft, y, size: 10, font: fontBold });
       y -= 15;
-      page.drawText(`RC: ${invoice.rc_number || ''}`, { x: 50, y, size: 10, font });
+      page.drawText(invoice.my_company || '', { x: colLeft, y, size: 10, font: fontRegular });
       y -= 12;
-      page.drawText(`NIF: ${invoice.nif || ''}`, { x: 50, y, size: 10, font });
+      page.drawText(`RC: ${invoice.rc_number || ''}`, { x: colLeft, y, size: 9, font: fontRegular });
       y -= 12;
-      page.drawText(`NIS: ${invoice.nis || ''}`, { x: 50, y, size: 10, font });
+      page.drawText(`NIF: ${invoice.nif || ''}`, { x: colLeft, y, size: 9, font: fontRegular });
       y -= 12;
-      page.drawText(`AI: ${invoice.ai || ''}`, { x: 50, y, size: 10, font });
+      page.drawText(`NIS: ${invoice.nis || ''}`, { x: colLeft, y, size: 9, font: fontRegular });
       y -= 12;
-      page.drawText(`Tél: ${invoice.phone || ''}`, { x: 50, y, size: 10, font });
+      page.drawText(`AI: ${invoice.ai || ''}`, { x: colLeft, y, size: 9, font: fontRegular });
       y -= 12;
-      page.drawText(`Email: ${invoice.email || ''}`, { x: 50, y, size: 10, font });
+      page.drawText(`Tél: ${invoice.phone || ''}`, { x: colLeft, y, size: 9, font: fontRegular });
+      y -= 12;
+      page.drawText(`Email: ${invoice.email || ''}`, { x: colLeft, y, size: 9, font: fontRegular });
+
+      // Réinitialiser y pour la colonne de droite
+      let yRight = height - margin - 45; // aligné avec le début de l'émetteur
 
       // Informations du client (à droite)
-      let xRight = width - 300;
-      page.drawText('Client:', { x: xRight, y: height - 50, size: 12, font: boldFont });
-      page.drawText(`${invoice.customer_company || invoice.contact_name}`, { x: xRight, y: height - 65, size: 10, font });
+      page.drawText('Client :', { x: colRight, y: yRight, size: 10, font: fontBold });
+      yRight -= 15;
+      page.drawText(invoice.customer_company || invoice.contact_name, { x: colRight, y: yRight, size: 10, font: fontRegular });
+      yRight -= 12;
       if (invoice.address || invoice.city) {
-        page.drawText(`${invoice.address || ''} ${invoice.city || ''}`, { x: xRight, y: height - 80, size: 10, font });
+        page.drawText(`${invoice.address || ''} ${invoice.city || ''}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
+        yRight -= 12;
       }
-      if (invoice.customer_rc) page.drawText(`RC: ${invoice.customer_rc}`, { x: xRight, y: height - 95, size: 10, font });
-      if (invoice.customer_nif) page.drawText(`NIF: ${invoice.customer_nif}`, { x: xRight, y: height - 110, size: 10, font });
-      if (invoice.customer_nis) page.drawText(`NIS: ${invoice.customer_nis}`, { x: xRight, y: height - 125, size: 10, font });
-      if (invoice.customer_ai) page.drawText(`AI: ${invoice.customer_ai}`, { x: xRight, y: height - 140, size: 10, font });
+      if (invoice.customer_rc) {
+        page.drawText(`RC: ${invoice.customer_rc}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
+        yRight -= 12;
+      }
+      if (invoice.customer_nif) {
+        page.drawText(`NIF: ${invoice.customer_nif}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
+        yRight -= 12;
+      }
+      if (invoice.customer_nis) {
+        page.drawText(`NIS: ${invoice.customer_nis}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
+        yRight -= 12;
+      }
+      if (invoice.customer_ai) {
+        page.drawText(`AI: ${invoice.customer_ai}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
+        yRight -= 12;
+      }
 
-      y = height - 200;
+      // Revenir à la position y la plus basse entre les deux colonnes
+      y = Math.min(y, yRight) - 20;
 
-      // Numéro et dates
-      page.drawText(`N° Facture: ${invoice.invoice_number}`, { x: 50, y, size: 12, font: boldFont });
+      // Dates
+      page.drawText(`Date d'émission : ${invoice.issue_date}`, { x: colLeft, y, size: 10, font: fontRegular });
+      page.drawText(`Date d'échéance : ${invoice.due_date}`, { x: colRight, y, size: 10, font: fontRegular });
+      y -= 25;
+
+      drawLine(y);
       y -= 15;
-      page.drawText(`Date d'émission: ${invoice.issue_date}`, { x: 50, y, size: 10, font });
-      y -= 15;
-      page.drawText(`Date d'échéance: ${invoice.due_date}`, { x: 50, y, size: 10, font });
-
-      y -= 30;
 
       // Tableau des articles
       const tableTop = y;
-      const col1 = 50, col2 = 250, col3 = 350, col4 = 450, col5 = 520;
+      const colDesc = margin;
+      const colQty = 300;
+      const colPrice = 370;
+      const colTax = 430;
+      const colTotal = 490;
+      const rowHeight = 15;
 
-      page.drawText('Description', { x: col1, y: tableTop, size: 10, font: boldFont });
-      page.drawText('Qté', { x: col2, y: tableTop, size: 10, font: boldFont });
-      page.drawText('P.U HT', { x: col3, y: tableTop, size: 10, font: boldFont });
-      page.drawText('TVA %', { x: col4, y: tableTop, size: 10, font: boldFont });
-      page.drawText('Total', { x: col5, y: tableTop, size: 10, font: boldFont });
+      // En-têtes du tableau
+      page.drawText('Description', { x: colDesc, y: tableTop, size: 10, font: fontBold });
+      page.drawText('Qté', { x: colQty, y: tableTop, size: 10, font: fontBold });
+      page.drawText('P.U HT', { x: colPrice, y: tableTop, size: 10, font: fontBold });
+      page.drawText('TVA %', { x: colTax, y: tableTop, size: 10, font: fontBold });
+      page.drawText('Total', { x: colTotal, y: tableTop, size: 10, font: fontBold });
+      y = tableTop - 5;
+      drawLine(y);
+      y -= rowHeight;
 
-      y = tableTop - 15;
-
+      // Lignes de données
       for (const item of items.results) {
-        if (y < 50) {
-          page = pdfDoc.addPage([595, 842]);
-          y = height - 50;
-          page.drawText('Description', { x: col1, y, size: 10, font: boldFont });
-          page.drawText('Qté', { x: col2, y, size: 10, font: boldFont });
-          page.drawText('P.U HT', { x: col3, y, size: 10, font: boldFont });
-          page.drawText('TVA %', { x: col4, y, size: 10, font: boldFont });
-          page.drawText('Total', { x: col5, y, size: 10, font: boldFont });
-          y -= 15;
+        if (y < margin + 50) {
+          // Nouvelle page
+          page = pdfDoc.addPage([595.28, 841.89]);
+          y = height - margin;
+          // Répéter les en-têtes sur la nouvelle page
+          page.drawText('Description', { x: colDesc, y, size: 10, font: fontBold });
+          page.drawText('Qté', { x: colQty, y, size: 10, font: fontBold });
+          page.drawText('P.U HT', { x: colPrice, y, size: 10, font: fontBold });
+          page.drawText('TVA %', { x: colTax, y, size: 10, font: fontBold });
+          page.drawText('Total', { x: colTotal, y, size: 10, font: fontBold });
+          y -= 5;
+          drawLine(y);
+          y -= rowHeight;
         }
-        page.drawText(item.description.substring(0, 30), { x: col1, y, size: 9, font });
-        page.drawText(item.quantity.toString(), { x: col2, y, size: 9, font });
-        page.drawText(item.unit_price.toFixed(2), { x: col3, y, size: 9, font });
-        page.drawText(item.tax_rate.toString(), { x: col4, y, size: 9, font });
+        page.drawText(item.description.substring(0, 30), { x: colDesc, y, size: 9, font: fontRegular });
+        page.drawText(item.quantity.toString(), { x: colQty, y, size: 9, font: fontRegular });
+        page.drawText(item.unit_price.toFixed(2), { x: colPrice, y, size: 9, font: fontRegular });
+        page.drawText(item.tax_rate.toString(), { x: colTax, y, size: 9, font: fontRegular });
         const totalLine = item.quantity * item.unit_price * (1 + item.tax_rate / 100);
-        page.drawText(totalLine.toFixed(2), { x: col5, y, size: 9, font });
-        y -= 15;
+        page.drawText(totalLine.toFixed(2), { x: colTotal, y, size: 9, font: fontRegular });
+        y -= rowHeight;
       }
 
-      y -= 20;
+      drawLine(y);
+      y -= 15;
 
-      // Calcul du total TVA
+      // Calcul des totaux
+      let subtotal = 0;
       let taxTotal = 0;
       for (const item of items.results) {
-        taxTotal += item.quantity * item.unit_price * (item.tax_rate / 100);
+        const net = item.quantity * item.unit_price;
+        subtotal += net;
+        taxTotal += net * (item.tax_rate / 100);
       }
 
-      page.drawText(`Total HT: ${(invoice.total - taxTotal).toFixed(2)} DZD`, { x: col3, y, size: 10, font: boldFont });
+      // Aligner les totaux à droite
+      const totalX = colTotal;
+      page.drawText(`Total HT: ${subtotal.toFixed(2)} DZD`, { x: totalX - 120, y, size: 10, font: fontBold });
       y -= 15;
-      page.drawText(`Total TVA: ${taxTotal.toFixed(2)} DZD`, { x: col3, y, size: 10, font: boldFont });
+      page.drawText(`Total TVA: ${taxTotal.toFixed(2)} DZD`, { x: totalX - 120, y, size: 10, font: fontBold });
       y -= 15;
-      page.drawText(`Total TTC: ${invoice.total.toFixed(2)} DZD`, { x: col3, y, size: 12, font: boldFont });
+      page.drawText(`Total TTC: ${invoice.total.toFixed(2)} DZD`, { x: totalX - 120, y, size: 12, font: fontBold });
 
       // Notes
       if (invoice.notes) {
-        y -= 30;
-        page.drawText('Notes:', { x: 50, y, size: 10, font: boldFont });
+        y -= 25;
+        page.drawText('Notes :', { x: margin, y, size: 10, font: fontBold });
         y -= 15;
-        page.drawText(invoice.notes, { x: 50, y, size: 9, font });
+        page.drawText(invoice.notes, { x: margin, y, size: 9, font: fontRegular });
       }
 
       const pdfBytes = await pdfDoc.save();
@@ -238,7 +310,3 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
         },
       });
     }
-  }
-
-  return new Response('Not Found', { status: 404 });
-}
