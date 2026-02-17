@@ -118,8 +118,8 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
           SELECT i.*, 
                  c.company_name as customer_company, c.contact_name, 
                  c.address, c.city, c.rc_number as customer_rc, 
-                 c.nif as customer_nif, c.nis as customer_nis, c.ai as customer_ai,
-                 u.company_name as my_company, u.rc_number, u.nif, u.nis, u.ai, u.phone, u.email
+                 c.ai as customer_ai,
+                 u.company_name as my_company, u.rc_number, u.ai, u.phone, u.email
           FROM invoices i
           JOIN customers c ON i.customer_id = c.id
           JOIN users u ON i.user_id = u.id
@@ -148,7 +148,7 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       // En-tête
       page.drawText('FACTURE', { x: margin, y, size: 24, font: fontBold });
       page.drawText(`N° ${invoice.invoice_number}`, { x: width - margin - 100, y, size: 14, font: fontBold });
-      y -= 30;
+      y -= 35;
 
       // Informations
       page.drawText('Émetteur :', { x: margin, y, size: 10, font: fontBold });
@@ -157,11 +157,7 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       y -= 12;
       page.drawText(`RC: ${invoice.rc_number || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
-      page.drawText(`NIF: ${invoice.nif || ''}`, { x: margin, y, size: 9, font: fontRegular });
-      y -= 12;
-      page.drawText(`NIS: ${invoice.nis || ''}`, { x: margin, y, size: 9, font: fontRegular });
-      y -= 12;
-      page.drawText(`AI: ${invoice.ai || ''}`, { x: margin, y, size: 9, font: fontRegular });
+      page.drawText(`MT: ${invoice.ai || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
       page.drawText(`Tél: ${invoice.phone || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
@@ -182,16 +178,8 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
         page.drawText(`RC: ${invoice.customer_rc}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
         yRight -= 12;
       }
-      if (invoice.customer_nif) {
-        page.drawText(`NIF: ${invoice.customer_nif}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
-        yRight -= 12;
-      }
-      if (invoice.customer_nis) {
-        page.drawText(`NIS: ${invoice.customer_nis}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
-        yRight -= 12;
-      }
       if (invoice.customer_ai) {
-        page.drawText(`AI: ${invoice.customer_ai}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
+        page.drawText(`MT: ${invoice.customer_ai}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
         yRight -= 12;
       }
 
@@ -199,7 +187,7 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
       page.drawText(`Date d'émission : ${invoice.issue_date}`, { x: margin, y, size: 10, font: fontRegular });
       page.drawText(`Date d'échéance : ${invoice.due_date}`, { x: colRight, y, size: 10, font: fontRegular });
-      y -= 25;
+      y -= 35;
 
       // Tableau
       const colDesc = margin;
@@ -260,5 +248,6 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
   return new Response('Not Found', { status: 404 });
 }
+
 
 
