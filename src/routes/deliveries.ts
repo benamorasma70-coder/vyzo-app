@@ -103,6 +103,22 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
       });
     }
 
+    // Mise à jour du statut (PUT /deliveries/:id)
+    if (request.method === 'PUT' && id) {
+      const body = await request.json()
+      const { status } = body
+    
+      // Vous pouvez étendre pour modifier d'autres champs si nécessaire
+      const result = await db
+        .prepare('UPDATE deliveries SET status = ? WHERE id = ? AND user_id = ?')
+        .bind(status, id, payload.userId)
+        .run()
+    
+      if (result.meta.changes === 0) {
+        return new Response('Not Found', { status: 404 })
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 })
+    }
     // GET /deliveries/:id/pdf (télécharger le PDF du BL)
     if (request.method === 'GET' && action === 'pdf') {
       // Récupérer toutes les données nécessaires
@@ -253,3 +269,4 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
 
   return new Response('Not Found', { status: 404 });
 }
+
