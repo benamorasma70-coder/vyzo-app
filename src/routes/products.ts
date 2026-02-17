@@ -27,7 +27,19 @@ export async function handleProducts(request: Request, db: D1Database): Promise<
         `INSERT INTO products (user_id, reference, name, description, category, unit, purchase_price, sale_price, tax_rate, stock_quantity, min_stock)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .bind(payload.userId, reference, name, description, category, unit, purchasePrice, salePrice, taxRate, stockQuantity, minStock)
+      .bind(
+        payload.userId,
+        reference,
+        name,
+        description ?? null,
+        category ?? null,
+        unit,
+        purchasePrice ?? null,
+        salePrice,
+        taxRate ?? null,
+        stockQuantity ?? null,
+        minStock ?? null
+      )
       .run();
     return new Response(JSON.stringify({ id: result.meta.last_row_id }), { status: 201 });
   }
@@ -70,3 +82,4 @@ export async function handleProducts(request: Request, db: D1Database): Promise<
 
   return new Response('Method Not Allowed', { status: 405 });
 }
+
