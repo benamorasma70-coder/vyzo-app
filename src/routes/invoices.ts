@@ -90,8 +90,8 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    
-    // Après les autres routes, dans le bloc if (id)
+
+    // PATCH /invoices/:id/status (mise à jour du statut)
     if (request.method === 'PATCH' && action === 'status') {
       const body = await request.json();
       const { status } = body;
@@ -101,7 +101,7 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
         .run();
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
-    
+
     // POST /invoices/:id/generate-pdf (marquer comme PDF généré)
     if (request.method === 'POST' && action === 'generate-pdf') {
       await db.prepare('UPDATE invoices SET has_pdf = 1 WHERE id = ? AND user_id = ?').bind(id, payload.userId).run();
@@ -150,7 +150,7 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       page.drawText(`N° ${invoice.invoice_number}`, { x: width - margin - 100, y, size: 14, font: fontBold });
       y -= 35;
 
-      // Informations
+      // Informations de l'émetteur
       page.drawText('Émetteur :', { x: margin, y, size: 10, font: fontBold });
       y -= 15;
       page.drawText(invoice.my_company || '', { x: margin, y, size: 10, font: fontRegular });
@@ -163,7 +163,7 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       y -= 12;
       page.drawText(`Email: ${invoice.email || ''}`, { x: margin, y, size: 9, font: fontRegular });
 
-      // Client (à droite)
+      // Informations du client (à droite)
       const colRight = width / 2 + 20;
       let yRight = height - margin - 45;
       page.drawText('Client :', { x: colRight, y: yRight, size: 10, font: fontBold });
@@ -185,11 +185,12 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
       y = Math.min(y, yRight) - 20;
 
+      // Dates
       page.drawText(`Date d'émission : ${invoice.issue_date}`, { x: margin, y, size: 10, font: fontRegular });
       page.drawText(`Date d'échéance : ${invoice.due_date}`, { x: colRight, y, size: 10, font: fontRegular });
       y -= 35;
 
-      // Tableau
+      // Tableau des articles
       const colDesc = margin;
       const colQty = 300;
       const colPrice = 370;
@@ -216,19 +217,30 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
       y -= 10;
 
-      // Totaux
+      // Calcul des totaux
       let subtotal = 0, taxTotal = 0;
       for (const item of items.results) {
         const net = item.quantity * item.unit_price;
         subtotal += net;
         taxTotal += net * (item.tax_rate / 100);
       }
+
       page.drawText(`Total HT: ${subtotal.toFixed(2)} TND`, { x: colTotal - 120, y, size: 10, font: fontBold });
       y -= 15;
       page.drawText(`Total TVA: ${taxTotal.toFixed(2)} TND`, { x: colTotal - 120, y, size: 10, font: fontBold });
       y -= 15;
       page.drawText(`Total TTC: ${invoice.total.toFixed(2)} TND`, { x: colTotal - 120, y, size: 12, font: fontBold });
 
+      // 🔹 Ajout du timbre fiscal (1 TND si total TTC >= 10)
+      const timbre = invoice.total >= 10 ? 1 : 0;
+      if (timbre > 0) {
+        y -= 20;
+        page.drawText(`Timbre fiscal: ${timbre.toFixed(2)} TND`, { x: colTotal - 120, y, size: 10, font: fontBold });
+        y -= 15;
+        page.drawText(`Total à payer: ${(invoice.total + timbre).toFixed(2)} TND`, { x: colTotal - 120, y, size: 12, font: fontBold });
+      }
+
+      // Notes
       if (invoice.notes) {
         y -= 25;
         page.drawText('Notes :', { x: margin, y, size: 10, font: fontBold });
@@ -248,6 +260,3 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
   return new Response('Not Found', { status: 404 });
 }
-
-
-
