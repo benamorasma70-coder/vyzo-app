@@ -22,13 +22,25 @@ export async function handleCustomers(request: Request, db: D1Database): Promise
   if (request.method === 'POST' && !id) {
     const body = await request.json();
     const { contactName, companyName, email, phone, address, city, rcNumber, nif, nis, ai } = body;
-  const result = await db
-    .prepare(
-      `INSERT INTO customers (user_id, contact_name, company_name, email, phone, address, city, rc_number, nif, nis, ai)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(payload.userId, contactName, companyName, email, phone, address, city, rcNumber, nif, nis, ai)
-    .run();
+    const result = await db
+      .prepare(
+        `INSERT INTO customers (user_id, contact_name, company_name, email, phone, address, city, rc_number, nif, nis, ai)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        payload.userId,
+        contactName ?? null,
+        companyName ?? null,
+        email ?? null,
+        phone ?? null,
+        address ?? null,
+        city ?? null,
+        rcNumber ?? null,
+        nif ?? null,
+        nis ?? null,
+        ai ?? null
+      )
+      .run();
     return new Response(JSON.stringify({ id: result.meta.last_row_id }), { status: 201 });
   }
 
@@ -70,4 +82,5 @@ export async function handleCustomers(request: Request, db: D1Database): Promise
 
   return new Response('Method Not Allowed', { status: 405 });
 }
+
 
