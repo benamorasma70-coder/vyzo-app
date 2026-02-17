@@ -90,7 +90,18 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
         headers: { 'Content-Type': 'application/json' },
       });
     }
-
+    
+    // Après les autres routes, dans le bloc if (id)
+    if (request.method === 'PATCH' && action === 'status') {
+      const body = await request.json();
+      const { status } = body;
+      await db
+        .prepare('UPDATE invoices SET status = ? WHERE id = ? AND user_id = ?')
+        .bind(status, id, payload.userId)
+        .run();
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }
+    
     // POST /invoices/:id/generate-pdf (marquer comme PDF généré)
     if (request.method === 'POST' && action === 'generate-pdf') {
       await db.prepare('UPDATE invoices SET has_pdf = 1 WHERE id = ? AND user_id = ?').bind(id, payload.userId).run();
@@ -249,3 +260,4 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
   return new Response('Not Found', { status: 404 });
 }
+
