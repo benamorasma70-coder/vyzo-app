@@ -44,10 +44,11 @@ export default {
       } else {
         response = new Response('Not Found', { status: 404 });
       }
-    } catch (err) {
-      console.error(err);
-      response = new Response('Internal Server Error', { status: 500 });
-    }
+      } catch (err) {
+        console.error(err);
+        // Renvoyer l'erreur sous forme de texte pour debug
+        return new Response(String(err), { status: 500, headers: { 'Content-Type': 'text/plain' } });
+      }
 
     // Ajouter les en-têtes CORS à toutes les réponses
     const corsHeaders = getCorsHeaders(request);
@@ -61,3 +62,4 @@ export default {
     });
   },
 };
+
