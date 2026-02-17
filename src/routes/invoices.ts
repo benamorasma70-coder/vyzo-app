@@ -91,18 +91,19 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       });
     }
 
+    // Remplacer la route GET /invoices/:id/pdf par :
     if (request.method === 'GET' && action === 'pdf') {
       const invoice = await db
         .prepare('SELECT invoice_number FROM invoices WHERE id = ? AND user_id = ?')
         .bind(id, payload.userId)
         .first();
       if (!invoice) return new Response('Not Found', { status: 404 });
-
+    
       const content = `PDF de la facture ${invoice.invoice_number} (simulation)`;
       return new Response(content, {
         headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="facture-${invoice.invoice_number}.pdf"`,
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `attachment; filename="facture-${invoice.invoice_number}.txt"`,
         },
       });
     }
@@ -110,3 +111,4 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
   return new Response('Not Found', { status: 404 });
 }
+
