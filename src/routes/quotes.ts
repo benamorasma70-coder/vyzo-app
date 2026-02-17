@@ -219,7 +219,7 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
       // En-tête
       page.drawText('DEVIS', { x: margin, y, size: 24, font: fontBold });
       page.drawText(`N° ${quote.quote_number}`, { x: width - margin - 100, y, size: 14, font: fontBold });
-      y -= 30;
+      y -= 35;
 
       // Informations
       page.drawText('Émetteur :', { x: margin, y, size: 10, font: fontBold });
@@ -228,7 +228,7 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
       y -= 12;
       page.drawText(`RC: ${quote.rc_number || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
-      page.drawText(`AI: ${quote.ai || ''}`, { x: margin, y, size: 9, font: fontRegular });
+      page.drawText(`MT: ${quote.ai || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
       page.drawText(`Tél: ${quote.phone || ''}`, { x: margin, y, size: 9, font: fontRegular });
       y -= 12;
@@ -250,7 +250,7 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
         yRight -= 12;
       }
       if (quote.customer_ai) {
-        page.drawText(`AI: ${quote.customer_ai}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
+        page.drawText(`MT: ${quote.customer_ai}`, { x: colRight, y: yRight, size: 9, font: fontRegular });
         yRight -= 12;
       }
 
@@ -258,7 +258,7 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
 
       page.drawText(`Date d'émission : ${quote.issue_date}`, { x: margin, y, size: 10, font: fontRegular });
       page.drawText(`Date d'expiration : ${quote.expiry_date || '-'}`, { x: colRight, y, size: 10, font: fontRegular });
-      y -= 25;
+      y -= 35;
 
       // Tableau
       const colDesc = margin;
@@ -319,6 +319,7 @@ export async function handleQuotes(request: Request, db: D1Database): Promise<Re
 
   return new Response('Not Found', { status: 404 });
 }
+
 
 
 
