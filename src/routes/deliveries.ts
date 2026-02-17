@@ -38,23 +38,39 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
 
     const deliveryNumber = await generateNumber(db, payload.userId, 'BL', 'deliveries', 'delivery_number');
 
+    // Insertion du BL
     const result = await db
       .prepare(
         `INSERT INTO deliveries (user_id, delivery_number, customer_id, delivery_date, notes, total, status)
          VALUES (?, ?, ?, ?, ?, ?, 'draft')`
       )
-      .bind(payload.userId, deliveryNumber, customerId, deliveryDate, notes, total)
+      .bind(
+        payload.userId,
+        deliveryNumber,
+        customerId,
+        deliveryDate,
+        notes ?? null,
+        total
+      )
       .run();
-
+    
     const deliveryId = result.meta.last_row_id;
 
+    // Insertion des items
     for (const item of items) {
       await db
         .prepare(
           `INSERT INTO delivery_items (delivery_id, product_id, description, quantity, unit_price, tax_rate)
            VALUES (?, ?, ?, ?, ?, ?)`
         )
-        .bind(deliveryId, item.productId || null, item.description, item.quantity, item.unitPrice, item.taxRate)
+        .bind(
+          deliveryId,
+          item.productId ?? null,
+          item.description,
+          item.quantity,
+          item.unitPrice,
+          item.taxRate
+        )
         .run();
     }
 
@@ -87,3 +103,4 @@ export async function handleDeliveries(request: Request, db: D1Database): Promis
 
   return new Response('Not Found', { status: 404 });
 }
+
