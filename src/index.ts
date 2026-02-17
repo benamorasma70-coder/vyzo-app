@@ -1,3 +1,4 @@
+// src/index.ts (version améliorée)
 import { handleAuth } from './routes/auth';
 import { handleSubscriptions } from './routes/subscriptions';
 import { handleCustomers } from './routes/customers';
@@ -6,7 +7,7 @@ import { handleInvoices } from './routes/invoices';
 import { handleQuotes } from './routes/quotes';
 import { handleDeliveries } from './routes/deliveries';
 import { handleDashboard } from './routes/dashboard';
-import { getCorsHeaders, handleOptions } from './utils/cors'; // Changé ici
+import { getCorsHeaders, handleOptions } from './utils/cors';
 
 export interface Env {
   DB: D1Database;
@@ -48,10 +49,11 @@ export default {
       response = new Response('Internal Server Error', { status: 500 });
     }
 
-    // Utiliser les en-têtes dynamiques basés sur l'origine
+    // Ajouter les en-têtes CORS à toutes les réponses
     const corsHeaders = getCorsHeaders(request);
     const newHeaders = new Headers(response.headers);
     Object.entries(corsHeaders).forEach(([key, value]) => newHeaders.set(key, value));
+    
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
