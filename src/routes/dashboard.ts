@@ -9,28 +9,87 @@ export async function handleDashboard(request: Request, db: D1Database): Promise
 
   const userId = payload.userId;
 
-  const totalCustomers = await db.prepare('SELECT COUNT(*) as count FROM customers WHERE user_id = ?').bind(userId).first<{ count: number }>();
-  const totalProducts = await db.prepare('SELECT COUNT(*) as count FROM products WHERE user_id = ?').bind(userId).first<{ count: number }>();
-
-  const now = new Date();
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-
-  const monthlyInvoices = await db
-    .prepare('SELECT COUNT(*) as count FROM invoices WHERE user_id = ? AND issue_date BETWEEN ? AND ?')
-    .bind(userId, firstDay, lastDay)
+  // Totaux généraux
+  const totalCustomers = await db
+    .prepare('SELECT COUNT(*) as count FROM customers WHERE user_id = ?')
+    .bind(userId)
+    .first<{ count: number }>();
+  const totalProducts = await db
+    .prepare('SELECT COUNT(*) as count FROM products WHERE user_id = ?')
+    .bind(userId)
     .first<{ count: number }>();
 
-  const monthlyRevenue = await db
+  // Mois en cours
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1; // 1-12
+  const firstDayCurrent = new Date(year, month - 1, 1).toISOString().split('T')[0];
+  const lastDayCurrent = new Date(year, month, 0).toISOString().split('T')[0];
+
+  // Mois précédent
+  const firstDayPrev = new Date(year, month - 2, 1).toISOString().split('T')[0];
+  const lastDayPrev = new Date(year, month - 1, 0).toISOString().split('T')[0];
+
+  // Factures du mois en cours
+  const currentInvoices = await db
+    .prepare('SELECT COUNT(*) as count FROM invoices WHERE user_id = ? AND issue_date BETWEEN ? AND ?')
+    .bind(userId, firstDayCurrent, lastDayCurrent)
+    .first<{ count: number }>();
+  const currentRevenue = await db
     .prepare('SELECT SUM(total) as total FROM invoices WHERE user_id = ? AND issue_date BETWEEN ? AND ? AND status = "paid"')
-    .bind(userId, firstDay, lastDay)
+    .bind(userId, firstDayCurrent, lastDayCurrent)
     .first<{ total: number }>();
 
+  // Factures du mois précédent
+  const prevInvoices = await db
+    .prepare('SELECT COUNT(*) as count FROM invoices WHERE user_id = ? AND issue_date BETWEEN ? AND ?')
+    .bind(userId, firstDayPrev, lastDayPrev)
+    .first<{ count: number }>();
+  const prevRevenue = await db
+    .prepare('SELECT SUM(total) as total FROM invoices WHERE user_id = ? AND issue_date BETWEEN ? AND ? AND status = "paid"')
+    .bind(userId, firstDayPrev, lastDayPrev)
+    .first<{ total: number }>();
+
+  // Évolution clients et produits (basée sur la date de création dans le mois)
+  const currentCustomers = await db
+    .prepare('SELECT COUNT(*) as count FROM customers WHERE user_id = ? AND created_at >= ?')
+    .bind(userId, firstDayCurrent)
+    .first<{ count: number }>();
+  const prevCustomers = await db
+    .prepare('SELECT COUNT(*) as count FROM customers WHERE user_id = ? AND created_at BETWEEN ? AND ?')
+    .bind(userId, firstDayPrev, lastDayPrev)
+    .first<{ count: number }>();
+
+  const currentProducts = await db
+    .prepare('SELECT COUNT(*) as count FROM products WHERE user_id = ? AND created_at >= ?')
+    .bind(userId, firstDayCurrent)
+    .first<{ count: number }>();
+  const prevProducts = await db
+    .prepare('SELECT COUNT(*) as count FROM products WHERE user_id = ? AND created_at BETWEEN ? AND ?')
+    .bind(userId, firstDayPrev, lastDayPrev)
+    .first<{ count: number }>();
+
+  // Calcul des pourcentages de variation (éviter division par zéro)
+  const calculateTrend = (current: number, previous: number) => {
+    if (previous === 0) return current > 0 ? '+100%' : '0%';
+    const change = ((current - previous) / previous) * 100;
+    return (change > 0 ? '+' : '') + change.toFixed(1) + '%';
+  };
+
+  const trends = {
+    customers: calculateTrend(currentCustomers?.count || 0, prevCustomers?.count || 0),
+    products: calculateTrend(currentProducts?.count || 0, prevProducts?.count || 0),
+    invoices: calculateTrend(currentInvoices?.count || 0, prevInvoices?.count || 0),
+    revenue: calculateTrend(currentRevenue?.total || 0, prevRevenue?.total || 0),
+  };
+
+  // Alertes stock bas
   const lowStock = await db
     .prepare('SELECT id, name, stock_quantity FROM products WHERE user_id = ? AND stock_quantity <= min_stock AND min_stock > 0')
     .bind(userId)
     .all();
 
+  // Dernières factures (5)
   const recentInvoices = await db
     .prepare(`
       SELECT i.id, i.invoice_number, i.total, i.status, c.company_name as customer_name
@@ -46,11 +105,14 @@ export async function handleDashboard(request: Request, db: D1Database): Promise
   const stats = {
     totalCustomers: totalCustomers?.count || 0,
     totalProducts: totalProducts?.count || 0,
-    monthlyInvoices: monthlyInvoices?.count || 0,
-    monthlyRevenue: monthlyRevenue?.total || 0,
+    monthlyInvoices: currentInvoices?.count || 0,
+    monthlyRevenue: currentRevenue?.total || 0,
+    trends,
     lowStock: lowStock.results,
     recentInvoices: recentInvoices.results,
   };
 
-  return new Response(JSON.stringify(stats), { headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(stats), {
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
