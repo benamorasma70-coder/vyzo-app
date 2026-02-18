@@ -19,7 +19,10 @@ if (request.method === 'GET' && pathParts[2] === 'export') {
   const invoices = await db
     .prepare(`
       SELECT i.invoice_number, i.issue_date, i.due_date, i.total, i.paid_amount,
-             CASE WHEN i.status = 'paid' THEN i.total ELSE i.paid_amount END as paid_display,
+             CASE 
+               WHEN i.status IN ('paid', 'partial') THEN i.total 
+               ELSE i.paid_amount 
+             END as paid_display,
              i.status,
              c.company_name as customer_name
       FROM invoices i
@@ -289,6 +292,7 @@ if (request.method === 'GET' && pathParts[2] === 'export') {
 
   return new Response('Not Found', { status: 404 });
 }
+
 
 
 
