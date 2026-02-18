@@ -14,6 +14,33 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
   const id = pathParts[2];
   const action = pathParts[3];
 
+  // GET /invoices/export (export CSV)
+  if (request.method === 'GET' && pathParts[2] === 'export') {
+    const invoices = await db
+      .prepare(`
+        SELECT i.invoice_number, i.issue_date, i.due_date, i.total, i.paid_amount, i.status,
+               c.company_name as customer_name
+        FROM invoices i
+        JOIN customers c ON i.customer_id = c.id
+        WHERE i.user_id = ?
+        ORDER BY i.created_at DESC
+      `)
+      .bind(payload.userId)
+      .all();
+
+    let csv = 'Numéro;Client;Date émission;Date échéance;Total TTC;Payé;Statut\n';
+    for (const inv of invoices.results) {
+      csv += `"${inv.invoice_number}";"${inv.customer_name}";"${inv.issue_date}";"${inv.due_date}";${inv.total};${inv.paid_amount};"${inv.status}"\n`;
+    }
+
+    return new Response(csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="factures.csv"',
+      },
+    });
+  }
+
   // GET /invoices (liste)
   if (request.method === 'GET' && !id) {
     const invoices = await db
@@ -42,7 +69,6 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
     }
 
     const invoiceNumber = await generateNumber(db, payload.userId, 'FACT', 'invoices', 'invoice_number');
-
     const result = await db
       .prepare(
         `INSERT INTO invoices (user_id, invoice_number, customer_id, issue_date, due_date, notes, total, status)
@@ -91,7 +117,7 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       });
     }
 
-    // PATCH /invoices/:id/status (mise à jour du statut)
+    // PATCH /invoices/:id/status
     if (request.method === 'PATCH' && action === 'status') {
       const body = await request.json();
       const { status } = body;
@@ -102,7 +128,7 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
 
-    // POST /invoices/:id/generate-pdf (marquer comme PDF généré)
+    // POST /invoices/:id/generate-pdf
     if (request.method === 'POST' && action === 'generate-pdf') {
       await db.prepare('UPDATE invoices SET has_pdf = 1 WHERE id = ? AND user_id = ?').bind(id, payload.userId).run();
       return new Response(JSON.stringify({ pdf_url: `/invoices/${id}/pdf` }), {
@@ -260,3 +286,4 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
   return new Response('Not Found', { status: 404 });
 }
+
