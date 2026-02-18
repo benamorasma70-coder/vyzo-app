@@ -19,10 +19,12 @@ export async function handleDashboard(request: Request, db: D1Database): Promise
     .bind(userId)
     .first<{ count: number }>();
 
-  // Mois en cours
+  // Périodes
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1; // 1-12
+
+  // Mois en cours
   const firstDayCurrent = new Date(year, month - 1, 1).toISOString().split('T')[0];
   const lastDayCurrent = new Date(year, month, 0).toISOString().split('T')[0];
 
@@ -50,7 +52,7 @@ export async function handleDashboard(request: Request, db: D1Database): Promise
     .bind(userId, firstDayPrev, lastDayPrev)
     .first<{ total: number }>();
 
-  // Évolution clients et produits (basée sur la date de création dans le mois)
+  // Évolution clients et produits (basée sur la date de création)
   const currentCustomers = await db
     .prepare('SELECT COUNT(*) as count FROM customers WHERE user_id = ? AND created_at >= ?')
     .bind(userId, firstDayCurrent)
@@ -69,11 +71,10 @@ export async function handleDashboard(request: Request, db: D1Database): Promise
     .bind(userId, firstDayPrev, lastDayPrev)
     .first<{ count: number }>();
 
-  // Calcul des pourcentages de variation (éviter division par zéro)
-  const calculateTrend = (current: number, previous: number) => {
-    if (previous === 0) return current > 0 ? '+100%' : '0%';
-    const change = ((current - previous) / previous) * 100;
-    return (change > 0 ? '+' : '') + change.toFixed(1) + '%';
+  // Fonction pour calculer le pourcentage de variation (nombre)
+  const calculateTrend = (current: number, previous: number): number => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return Number((((current - previous) / previous) * 100).toFixed(1));
   };
 
   const trends = {
