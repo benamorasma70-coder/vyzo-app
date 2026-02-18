@@ -126,11 +126,19 @@ if (request.method === 'GET' && pathParts[2] === 'export') {
     // PATCH /invoices/:id/status
     if (request.method === 'PATCH' && action === 'status') {
       const body = await request.json();
-      const { status } = body;
-      await db
-        .prepare('UPDATE invoices SET status = ? WHERE id = ? AND user_id = ?')
-        .bind(status, id, payload.userId)
-        .run();
+      const { status, paidAmount } = body;
+      let query = 'UPDATE invoices SET status = ?';
+      const params: any[] = [status];
+    
+      if (paidAmount !== undefined) {
+        query += ', paid_amount = ?';
+        params.push(paidAmount);
+      }
+    
+      query += ' WHERE id = ? AND user_id = ?';
+      params.push(id, payload.userId);
+    
+      await db.prepare(query).bind(...params).run();
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
 
@@ -292,6 +300,7 @@ if (request.method === 'GET' && pathParts[2] === 'export') {
 
   return new Response('Not Found', { status: 404 });
 }
+
 
 
 
