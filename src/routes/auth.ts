@@ -67,7 +67,6 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
   if (path === '/auth/login' && request.method === 'POST') {
     const { email, password } = await request.json();
 
-    // Récupérer l'utilisateur avec le champ is_admin
     const user = await db
       .prepare('SELECT id, email, company_name, password, is_admin FROM users WHERE email = ?')
       .bind(email)
@@ -83,7 +82,6 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
       .bind(user.id)
       .first();
 
-    // Si aucun abonnement n'existe (cas improbable), en créer un par défaut
     if (!subscription) {
       const expires = new Date();
       expires.setMonth(expires.getMonth() + 1);
@@ -97,7 +95,6 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
         .first();
     }
 
-    // Calculer les jours restants
     if (subscription) {
       const expires = new Date(subscription.expires_at);
       const now = new Date();
@@ -131,6 +128,7 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
     const payload = verifyToken(token);
     if (!payload) return jsonResponse({ error: 'Unauthorized' }, 401);
 
+    // Récupérer l'utilisateur avec is_admin
     const user = await db
       .prepare('SELECT id, email, company_name, is_admin FROM users WHERE id = ?')
       .bind(payload.userId)
@@ -142,7 +140,7 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
       .bind(payload.userId)
       .first();
 
-    // Si aucun abonnement n'existe (anciens utilisateurs), en créer un par défaut
+    // Si aucun abonnement, en créer un par défaut
     if (!subscription) {
       const expires = new Date();
       expires.setMonth(expires.getMonth() + 1);
