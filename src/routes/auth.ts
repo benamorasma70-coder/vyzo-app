@@ -4,6 +4,7 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
   const url = new URL(request.url);
   const path = url.pathname;
 
+  // POST /auth/register
   if (path === '/auth/register' && request.method === 'POST') {
     const body = await request.json();
     const { email, password, companyName, phone, rcNumber, nif, nis, ai } = body;
@@ -41,6 +42,7 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
     });
   }
 
+  // POST /auth/login
   if (path === '/auth/login' && request.method === 'POST') {
     const { email, password } = await request.json();
     const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
@@ -53,6 +55,7 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
     });
   }
 
+  // GET /auth/me
   if (path === '/auth/me' && request.method === 'GET') {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader) return new Response('Unauthorized', { status: 401 });
@@ -61,10 +64,39 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
     if (!payload) return new Response('Unauthorized', { status: 401 });
 
     const user = await db.prepare('SELECT id, email, company_name FROM users WHERE id = ?').bind(payload.userId).first();
-    const subscription = await db
+
+    // Récupérer l'abonnement
+    let subscription = await db
       .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
       .bind(payload.userId)
       .first();
+
+    // Si aucun abonnement n'existe (anciens utilisateurs), en créer un par défaut
+    if (!subscription) {
+      const expires = new Date();
+      expires.setMonth(expires.getMonth() + 1);
+      await db
+        .prepare('INSERT INTO subscriptions (user_id, plan_name, display_name, expires_at) VALUES (?, ?, ?, ?)')
+        .bind(payload.userId, 'free', 'Gratuit', expires.toISOString().split('T')[0])
+        .run();
+      // Re-récupérer
+      subscription = await db
+        .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
+        .bind(payload.userId)
+        .first();
+    }
+
+    // Calculer les jours restants et l'état d'expiration proche
+    if (subscription) {
+      const expires = new Date(subscription.expires_at);
+      const now = new Date();
+      const daysRemaining = Math.ceil((expires.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      subscription = {
+        ...subscription,
+        expires_soon: daysRemaining <= 7,
+        days_remaining: daysRemaining,
+      };
+    }
 
     return new Response(JSON.stringify({ user, subscription }), {
       headers: { 'Content-Type': 'application/json' },
