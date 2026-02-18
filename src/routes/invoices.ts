@@ -127,7 +127,22 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
     if (request.method === 'PATCH' && action === 'status') {
       const body = await request.json();
       const { status, paid_amount } = body;
-
+    
+      // Si le nouveau statut est "paid" et que paid_amount n'est pas fourni, on le met au total
+      if (status === 'paid' && paid_amount === undefined) {
+        const invoice = await db
+          .prepare('SELECT total FROM invoices WHERE id = ? AND user_id = ?')
+          .bind(id, payload.userId)
+          .first();
+        if (!invoice) return new Response('Not Found', { status: 404 });
+        await db
+          .prepare('UPDATE invoices SET status = ?, paid_amount = ? WHERE id = ? AND user_id = ?')
+          .bind(status, invoice.total, id, payload.userId)
+          .run();
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+    
+      // Sinon, on utilise les valeurs fournies
       let query = 'UPDATE invoices SET status = ?';
       const params: any[] = [status];
       if (paid_amount !== undefined) {
@@ -136,9 +151,8 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       }
       query += ' WHERE id = ? AND user_id = ?';
       params.push(id, payload.userId);
-
+    
       await db.prepare(query).bind(...params).run();
-
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
 
@@ -300,3 +314,4 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
   return new Response('Not Found', { status: 404 });
 }
+
