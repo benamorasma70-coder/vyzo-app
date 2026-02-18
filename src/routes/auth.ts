@@ -50,7 +50,13 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
       .bind(userId, expires.toISOString().split('T')[0])
       .run();
 
-    return jsonResponse({ token, user: { id: userId, email, companyName } });
+    // Récupérer l'abonnement fraîchement créé
+    const subscription = await db
+      .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
+      .bind(userId)
+      .first();
+
+    return jsonResponse({ token, user: { id: userId, email, companyName }, subscription });
   }
 
   // POST /auth/login
@@ -60,8 +66,45 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
     if (!user || !(await comparePassword(password, user.password))) {
       return jsonResponse({ error: 'Invalid credentials' }, 401);
     }
+
+    // Récupérer l'abonnement le plus récent
+    let subscription = await db
+      .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
+      .bind(user.id)
+      .first();
+
+    // Si aucun abonnement n'existe (cas improbable), en créer un par défaut
+    if (!subscription) {
+      const expires = new Date();
+      expires.setMonth(expires.getMonth() + 1);
+      await db
+        .prepare('INSERT INTO subscriptions (user_id, plan_name, display_name, expires_at) VALUES (?, ?, ?, ?)')
+        .bind(user.id, 'free', 'Gratuit', expires.toISOString().split('T')[0])
+        .run();
+      subscription = await db
+        .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
+        .bind(user.id)
+        .first();
+    }
+
+    // Calculer les jours restants
+    if (subscription) {
+      const expires = new Date(subscription.expires_at);
+      const now = new Date();
+      const daysRemaining = Math.ceil((expires.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      subscription = {
+        ...subscription,
+        expires_soon: daysRemaining <= 7,
+        days_remaining: daysRemaining,
+      };
+    }
+
     const token = generateToken(user.id);
-    return jsonResponse({ token, user: { id: user.id, email, companyName: user.company_name } });
+    return jsonResponse({
+      token,
+      user: { id: user.id, email, companyName: user.company_name },
+      subscription,
+    });
   }
 
   // GET /auth/me
@@ -74,7 +117,7 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
 
     const user = await db.prepare('SELECT id, email, company_name FROM users WHERE id = ?').bind(payload.userId).first();
 
-    // Récupérer l'abonnement le plus récent (trié par created_at DESC)
+    // Récupérer l'abonnement le plus récent
     let subscription = await db
       .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
       .bind(payload.userId)
@@ -88,14 +131,13 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
         .prepare('INSERT INTO subscriptions (user_id, plan_name, display_name, expires_at) VALUES (?, ?, ?, ?)')
         .bind(payload.userId, 'free', 'Gratuit', expires.toISOString().split('T')[0])
         .run();
-      // Re-récupérer
       subscription = await db
         .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
         .bind(payload.userId)
         .first();
     }
 
-    // Calculer les jours restants et l'état d'expiration proche
+    // Calculer les jours restants
     if (subscription) {
       const expires = new Date(subscription.expires_at);
       const now = new Date();
@@ -106,9 +148,6 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
         days_remaining: daysRemaining,
       };
     }
-
-    // Log pour débogage (visible dans les logs Cloudflare)
-    console.log(`/auth/me for user ${payload.userId}:`, { user, subscription });
 
     return jsonResponse({ user, subscription });
   }
