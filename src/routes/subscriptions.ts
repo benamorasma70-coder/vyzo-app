@@ -2,26 +2,77 @@ import { verifyToken } from '../utils/auth';
 
 const PLANS = [
   { id: 'free', name: 'free', display_name: 'Gratuit', price_monthly: 0, duration_months: 1, features: '[]' },
-  { id: 'monthly', name: 'monthly', display_name: 'Mensuel', price_monthly: 10, duration_months: 1, features: '[]' },
-  { id: 'semester', name: 'semester', display_name: 'Semestriel', price_monthly: 8, duration_months: 6, features: '[]' },
-  { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 6, duration_months: 12, features: '[]' },
+  { id: 'monthly', name: 'monthly', display_name: 'Mensuel', price_monthly: 5000, duration_months: 1, features: '[]' },
+  { id: 'semester', name: 'semester', display_name: 'Semestriel', price_monthly: 4000, duration_months: 6, features: '[]' },
+  { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 3000, duration_months: 12, features: '[]' },
 ];
 
-export async function handleSubscriptions(request: Request, db: D1Database): Promise<Response> {
-  const url = new URL(request.url);
-  const path = url.pathname;
-
-  if (path === '/subscriptions/plans' && request.method === 'GET') {
-    return new Response(JSON.stringify(PLANS), { headers: { 'Content-Type': 'application/json' } });
-  }
-
-  // Routes protégées
+export async function handleSubscriptions(request: Request, db: D1Database, env: any): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) return new Response('Unauthorized', { status: 401 });
   const token = authHeader.split(' ')[1];
   const payload = verifyToken(token);
   if (!payload) return new Response('Unauthorized', { status: 401 });
 
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  // GET /subscriptions/plans (public, mais on garde l'auth pour cohérence)
+  if (path === '/subscriptions/plans' && request.method === 'GET') {
+    return new Response(JSON.stringify(PLANS), { headers: { 'Content-Type': 'application/json' } });
+  }
+
+  // POST /subscriptions/request (créer une demande d'abonnement)
+  if (path === '/subscriptions/request' && request.method === 'POST') {
+    const body = await request.json();
+    const { planId } = body;
+    const plan = PLANS.find(p => p.id === planId);
+    if (!plan) {
+      return new Response(JSON.stringify({ error: 'Plan invalide' }), { status: 400 });
+    }
+
+    // Vérifier si une demande en attente existe déjà
+    const existing = await db
+      .prepare('SELECT id FROM subscription_requests WHERE user_id = ? AND status = "pending"')
+      .bind(payload.userId)
+      .first();
+    if (existing) {
+      return new Response(JSON.stringify({ error: 'Vous avez déjà une demande en attente' }), { status: 400 });
+    }
+
+    // Insérer la demande
+    await db
+      .prepare('INSERT INTO subscription_requests (user_id, plan_name, display_name) VALUES (?, ?, ?)')
+      .bind(payload.userId, plan.name, plan.display_name)
+      .run();
+
+    // Notifier l'admin par email (si configuré)
+    if (env.RESEND_API_KEY) {
+      try {
+        const adminEmail = 'admin@vyzo.app'; // À remplacer ou à récupérer depuis une variable d'env
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'noreply@vyzo.app',
+            to: adminEmail,
+            subject: 'Nouvelle demande d\'abonnement',
+            text: `Utilisateur ${payload.userId} a demandé le plan ${plan.display_name}.`,
+          }),
+        });
+      } catch (e) {
+        console.error('Erreur envoi email:', e);
+        // Ne pas bloquer la demande
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true }), { status: 201 });
+  }
+
+  // GET /subscriptions/current (abonnement actif) - reste inchangé
   if (path === '/subscriptions/current' && request.method === 'GET') {
     const sub = await db
       .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
@@ -41,25 +92,7 @@ export async function handleSubscriptions(request: Request, db: D1Database): Pro
     );
   }
 
-  if (path === '/subscriptions/subscribe' && request.method === 'POST') {
-    const { planId } = await request.json();
-    const plan = PLANS.find(p => p.id === planId);
-    if (!plan) return new Response(JSON.stringify({ error: 'Invalid plan' }), { status: 400 });
-
-    const expires = new Date();
-    expires.setMonth(expires.getMonth() + plan.duration_months);
-
-    await db
-      .prepare(
-        `INSERT INTO subscriptions (user_id, plan_name, display_name, expires_at)
-         VALUES (?, ?, ?, ?)`
-      )
-      .bind(payload.userId, plan.name, plan.display_name, expires.toISOString().split('T')[0])
-      .run();
-
-    return new Response(JSON.stringify({ success: true }), { status: 200 });
-  }
+  // Note : la route /subscribe est supprimée (ou désactivée)
 
   return new Response('Not Found', { status: 404 });
 }
-
