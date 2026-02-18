@@ -14,33 +14,35 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
   const id = pathParts[2];
   const action = pathParts[3];
 
-  // GET /invoices/export (export CSV)
-  if (request.method === 'GET' && pathParts[2] === 'export') {
-    const invoices = await db
-      .prepare(`
-        SELECT i.invoice_number, i.issue_date, i.due_date, i.total, i.paid_amount, i.status,
-               c.company_name as customer_name
-        FROM invoices i
-        JOIN customers c ON i.customer_id = c.id
-        WHERE i.user_id = ?
-        ORDER BY i.created_at DESC
-      `)
-      .bind(payload.userId)
-      .all();
+// GET /invoices/export (export CSV)
+if (request.method === 'GET' && pathParts[2] === 'export') {
+  const invoices = await db
+    .prepare(`
+      SELECT i.invoice_number, i.issue_date, i.due_date, i.total, i.paid_amount,
+             CASE WHEN i.status = 'paid' THEN i.total ELSE i.paid_amount END as paid_display,
+             i.status,
+             c.company_name as customer_name
+      FROM invoices i
+      JOIN customers c ON i.customer_id = c.id
+      WHERE i.user_id = ?
+      ORDER BY i.created_at DESC
+    `)
+    .bind(payload.userId)
+    .all();
 
-    let csv = 'Numéro;Client;Date émission;Date échéance;Total TTC;Payé;Statut\n';
-    for (const inv of invoices.results) {
-      csv += `"${inv.invoice_number}";"${inv.customer_name}";"${inv.issue_date}";"${inv.due_date}";${inv.total};${inv.paid_amount};"${inv.status}"\n`;
-    }
-
-    const bom = "\uFEFF";
-    return new Response(bom + csv, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="factures.csv"',
-      },
-    });
+  let csv = 'Numéro;Client;Date émission;Date échéance;Total TTC;Payé;Statut\n';
+  for (const inv of invoices.results) {
+    csv += `"${inv.invoice_number}";"${inv.customer_name}";"${inv.issue_date}";"${inv.due_date}";${inv.total};${inv.paid_display};"${inv.status}"\n`;
   }
+
+  const bom = "\uFEFF";
+  return new Response(bom + csv, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="factures.csv"',
+    },
+  });
+}
 
   // GET /invoices (liste)
   if (request.method === 'GET' && !id) {
@@ -287,5 +289,6 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
   return new Response('Not Found', { status: 404 });
 }
+
 
 
