@@ -4,7 +4,7 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
   const url = new URL(request.url);
   const path = url.pathname;
 
-  // Helper pour ajouter des en-têtes anti-cache
+  // Helper pour les réponses JSON avec en-têtes anti-cache
   const jsonResponse = (data: any, status = 200) => {
     return new Response(JSON.stringify(data), {
       status,
@@ -30,8 +30,8 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
     const hashed = await hashPassword(password);
     const result = await db
       .prepare(
-        `INSERT INTO users (email, password, company_name, phone, rc_number, nif, nis, ai)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO users (email, password, company_name, phone, rc_number, nif, nis, ai, is_admin)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
       )
       .bind(email, hashed, companyName, phone, rcNumber, nif, nis, ai)
       .run();
@@ -56,13 +56,23 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
       .bind(userId)
       .first();
 
-    return jsonResponse({ token, user: { id: userId, email, companyName }, subscription });
+    return jsonResponse({
+      token,
+      user: { id: userId, email, companyName, is_admin: 0 },
+      subscription,
+    });
   }
 
   // POST /auth/login
   if (path === '/auth/login' && request.method === 'POST') {
     const { email, password } = await request.json();
-    const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
+
+    // Récupérer l'utilisateur avec le champ is_admin
+    const user = await db
+      .prepare('SELECT id, email, company_name, password, is_admin FROM users WHERE email = ?')
+      .bind(email)
+      .first();
+
     if (!user || !(await comparePassword(password, user.password))) {
       return jsonResponse({ error: 'Invalid credentials' }, 401);
     }
@@ -100,9 +110,15 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
     }
 
     const token = generateToken(user.id);
+
     return jsonResponse({
       token,
-      user: { id: user.id, email, companyName: user.company_name },
+      user: {
+        id: user.id,
+        email: user.email,
+        companyName: user.company_name,
+        is_admin: user.is_admin,
+      },
       subscription,
     });
   }
@@ -115,7 +131,10 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
     const payload = verifyToken(token);
     if (!payload) return jsonResponse({ error: 'Unauthorized' }, 401);
 
-    const user = await db.prepare('SELECT id, email, company_name FROM users WHERE id = ?').bind(payload.userId).first();
+    const user = await db
+      .prepare('SELECT id, email, company_name, is_admin FROM users WHERE id = ?')
+      .bind(payload.userId)
+      .first();
 
     // Récupérer l'abonnement le plus récent
     let subscription = await db
