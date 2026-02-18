@@ -14,38 +14,38 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
   const id = pathParts[2];
   const action = pathParts[3];
 
-// GET /invoices/export (export CSV)
-if (request.method === 'GET' && pathParts[2] === 'export') {
-  const invoices = await db
-    .prepare(`
-      SELECT i.invoice_number, i.issue_date, i.due_date, i.total, i.paid_amount,
-             CASE 
-               WHEN i.status IN ('paid', 'partial') THEN i.total 
-               ELSE i.paid_amount 
-             END as paid_display,
-             i.status,
-             c.company_name as customer_name
-      FROM invoices i
-      JOIN customers c ON i.customer_id = c.id
-      WHERE i.user_id = ?
-      ORDER BY i.created_at DESC
-    `)
-    .bind(payload.userId)
-    .all();
+  // GET /invoices/export (export CSV)
+  if (request.method === 'GET' && pathParts[2] === 'export') {
+    const invoices = await db
+      .prepare(`
+        SELECT i.invoice_number, i.issue_date, i.due_date, i.total, i.paid_amount,
+               CASE 
+                 WHEN i.status = 'paid' THEN i.total
+                 ELSE i.paid_amount
+               END as paid_display,
+               i.status,
+               c.company_name as customer_name
+        FROM invoices i
+        JOIN customers c ON i.customer_id = c.id
+        WHERE i.user_id = ?
+        ORDER BY i.created_at DESC
+      `)
+      .bind(payload.userId)
+      .all();
 
-  let csv = 'Numéro;Client;Date émission;Date échéance;Total TTC;Payé;Statut\n';
-  for (const inv of invoices.results) {
-    csv += `"${inv.invoice_number}";"${inv.customer_name}";"${inv.issue_date}";"${inv.due_date}";${inv.total};${inv.paid_display};"${inv.status}"\n`;
+    let csv = 'Numéro;Client;Date émission;Date échéance;Total TTC;Payé;Statut\n';
+    for (const inv of invoices.results) {
+      csv += `"${inv.invoice_number}";"${inv.customer_name}";"${inv.issue_date}";"${inv.due_date}";${inv.total};${inv.paid_display};"${inv.status}"\n`;
+    }
+
+    const bom = "\uFEFF";
+    return new Response(bom + csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="factures.csv"',
+      },
+    });
   }
-
-  const bom = "\uFEFF";
-  return new Response(bom + csv, {
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="factures.csv"',
-    },
-  });
-}
 
   // GET /invoices (liste)
   if (request.method === 'GET' && !id) {
@@ -123,22 +123,22 @@ if (request.method === 'GET' && pathParts[2] === 'export') {
       });
     }
 
-    // PATCH /invoices/:id/status
+    // PATCH /invoices/:id/status (mise à jour du statut et éventuellement du montant payé)
     if (request.method === 'PATCH' && action === 'status') {
       const body = await request.json();
-      const { status, paidAmount } = body;
+      const { status, paid_amount } = body;
+
       let query = 'UPDATE invoices SET status = ?';
       const params: any[] = [status];
-    
-      if (paidAmount !== undefined) {
+      if (paid_amount !== undefined) {
         query += ', paid_amount = ?';
-        params.push(paidAmount);
+        params.push(paid_amount);
       }
-    
       query += ' WHERE id = ? AND user_id = ?';
       params.push(id, payload.userId);
-    
+
       await db.prepare(query).bind(...params).run();
+
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
 
@@ -150,7 +150,7 @@ if (request.method === 'GET' && pathParts[2] === 'export') {
       });
     }
 
-    // GET /invoices/:id/pdf (télécharger le PDF réel)
+    // GET /invoices/:id/pdf (code PDF complet – inchangé)
     if (request.method === 'GET' && action === 'pdf') {
       // Récupérer toutes les données nécessaires
       const invoice = await db
@@ -271,7 +271,7 @@ if (request.method === 'GET' && pathParts[2] === 'export') {
       y -= 15;
       page.drawText(`Total TTC: ${invoice.total.toFixed(2)} TND`, { x: colTotal - 120, y, size: 12, font: fontBold });
 
-      // 🔹 Ajout du timbre fiscal (1 TND si total TTC >= 10)
+      // Timbre fiscal
       const timbre = invoice.total >= 10 ? 1 : 0;
       if (timbre > 0) {
         y -= 20;
@@ -300,8 +300,3 @@ if (request.method === 'GET' && pathParts[2] === 'export') {
 
   return new Response('Not Found', { status: 404 });
 }
-
-
-
-
-
