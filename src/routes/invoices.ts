@@ -33,7 +33,8 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
       csv += `"${inv.invoice_number}";"${inv.customer_name}";"${inv.issue_date}";"${inv.due_date}";${inv.total};${inv.paid_amount};"${inv.status}"\n`;
     }
 
-    return new Response(csv, {
+    const bom = "\uFEFF";
+    return new Response(bom + csv, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': 'attachment; filename="factures.csv"',
@@ -286,4 +287,5 @@ export async function handleInvoices(request: Request, db: D1Database): Promise<
 
   return new Response('Not Found', { status: 404 });
 }
+
 
