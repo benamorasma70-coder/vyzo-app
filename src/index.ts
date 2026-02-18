@@ -8,6 +8,7 @@ import { handleQuotes } from './routes/quotes';
 import { handleDeliveries } from './routes/deliveries';
 import { handleDashboard } from './routes/dashboard';
 import { getCorsHeaders, handleOptions } from './utils/cors';
+import { handleAdmin } from './routes/admin';
 
 export interface Env {
   DB: D1Database;
@@ -44,6 +45,9 @@ export default {
       } else {
         response = new Response('Not Found', { status: 404 });
       }
+      else if (path.startsWith('/admin')) {
+        response = await handleAdmin(request, env.DB);
+      }
       } catch (err) {
         console.error(err);
         // Renvoyer l'erreur sous forme de texte pour debug
@@ -62,4 +66,5 @@ export default {
     });
   },
 };
+
 
