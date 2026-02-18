@@ -4,6 +4,19 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
   const url = new URL(request.url);
   const path = url.pathname;
 
+  // Helper pour ajouter des en-têtes anti-cache
+  const jsonResponse = (data: any, status = 200) => {
+    return new Response(JSON.stringify(data), {
+      status,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
+  };
+
   // POST /auth/register
   if (path === '/auth/register' && request.method === 'POST') {
     const body = await request.json();
@@ -11,7 +24,7 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
 
     const existing = await db.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
     if (existing) {
-      return new Response(JSON.stringify({ error: 'Email already exists' }), { status: 400 });
+      return jsonResponse({ error: 'Email already exists' }, 400);
     }
 
     const hashed = await hashPassword(password);
@@ -37,9 +50,7 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
       .bind(userId, expires.toISOString().split('T')[0])
       .run();
 
-    return new Response(JSON.stringify({ token, user: { id: userId, email, companyName } }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ token, user: { id: userId, email, companyName } });
   }
 
   // POST /auth/login
@@ -47,25 +58,23 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
     const { email, password } = await request.json();
     const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
     if (!user || !(await comparePassword(password, user.password))) {
-      return new Response(JSON.stringify({ error: 'Invalid credentials' }), { status: 401 });
+      return jsonResponse({ error: 'Invalid credentials' }, 401);
     }
     const token = generateToken(user.id);
-    return new Response(JSON.stringify({ token, user: { id: user.id, email, companyName: user.company_name } }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ token, user: { id: user.id, email, companyName: user.company_name } });
   }
 
   // GET /auth/me
   if (path === '/auth/me' && request.method === 'GET') {
     const authHeader = request.headers.get('Authorization');
-    if (!authHeader) return new Response('Unauthorized', { status: 401 });
+    if (!authHeader) return jsonResponse({ error: 'Unauthorized' }, 401);
     const token = authHeader.split(' ')[1];
     const payload = verifyToken(token);
-    if (!payload) return new Response('Unauthorized', { status: 401 });
+    if (!payload) return jsonResponse({ error: 'Unauthorized' }, 401);
 
     const user = await db.prepare('SELECT id, email, company_name FROM users WHERE id = ?').bind(payload.userId).first();
 
-    // Récupérer l'abonnement
+    // Récupérer l'abonnement le plus récent (trié par created_at DESC)
     let subscription = await db
       .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
       .bind(payload.userId)
@@ -98,10 +107,11 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
       };
     }
 
-    return new Response(JSON.stringify({ user, subscription }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    // Log pour débogage (visible dans les logs Cloudflare)
+    console.log(`/auth/me for user ${payload.userId}:`, { user, subscription });
+
+    return jsonResponse({ user, subscription });
   }
 
-  return new Response('Not Found', { status: 404 });
+  return jsonResponse({ error: 'Not Found' }, 404);
 }
