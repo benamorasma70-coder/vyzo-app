@@ -3,9 +3,9 @@ import { verifyToken } from '../utils/auth';
 // Définition des plans (identique à celle de subscriptions.ts)
 const PLANS = [
   { id: 'free', name: 'free', display_name: 'Gratuit', price_monthly: 0, duration_months: 1 },
-  { id: 'monthly', name: 'monthly', display_name: 'Mensuel', price_monthly: 5000, duration_months: 1 },
-  { id: 'semester', name: 'semester', display_name: 'Semestriel', price_monthly: 4000, duration_months: 6 },
-  { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 3000, duration_months: 12 },
+  { id: 'monthly', name: 'monthly', display_name: 'Mensuel', price_monthly: 10, duration_months: 1 },
+  { id: 'semester', name: 'semester', display_name: 'Semestriel', price_monthly: 8, duration_months: 6 },
+  { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 6, duration_months: 12 },
 ];
 
 export async function handleAdmin(request: Request, db: D1Database, env: any): Promise<Response> {
