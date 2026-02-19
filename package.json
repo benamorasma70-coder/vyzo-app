@@ -9,7 +9,8 @@
     "bcryptjs": "^2.4.3",
     "itty-router": "^5.0.18",
     "jsonwebtoken": "^9.0.2",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "resend": "^4.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250204.0",
@@ -19,5 +20,6 @@
     "wrangler": "^4.66.0"
   }
 }
+
 
 
