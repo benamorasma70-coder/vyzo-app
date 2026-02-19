@@ -1,5 +1,13 @@
 import { verifyToken } from '../utils/auth';
 
+// Définition des plans (identique à celle de subscriptions.ts)
+const PLANS = [
+  { id: 'free', name: 'free', display_name: 'Gratuit', price_monthly: 0, duration_months: 1 },
+  { id: 'monthly', name: 'monthly', display_name: 'Mensuel', price_monthly: 10, duration_months: 1 },
+  { id: 'semester', name: 'semester', display_name: 'Semestriel', price_monthly: 8, duration_months: 6 },
+  { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 6, duration_months: 12 },
+];
+
 export async function handleAdmin(request: Request, db: D1Database): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) return new Response('Unauthorized', { status: 401 });
@@ -16,7 +24,7 @@ export async function handleAdmin(request: Request, db: D1Database): Promise<Res
   const url = new URL(request.url);
   const path = url.pathname;
 
-  // GET /admin/subscription-requests
+  // GET /admin/subscription-requests (liste des demandes en attente)
   if (path === '/admin/subscription-requests' && request.method === 'GET') {
     const requests = await db
       .prepare(`
@@ -27,48 +35,56 @@ export async function handleAdmin(request: Request, db: D1Database): Promise<Res
         ORDER BY sr.requested_at DESC
       `)
       .all();
-    return new Response(JSON.stringify(requests.results), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(requests.results), {
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   // POST /admin/subscription-requests/:id/approve
-  const match = path.match(/^\/admin\/subscription-requests\/(\d+)\/approve$/);
-  if (match && request.method === 'POST') {
-    const requestId = match[1];
+  const approveMatch = path.match(/^\/admin\/subscription-requests\/(\d+)\/approve$/);
+  if (approveMatch && request.method === 'POST') {
+    const requestId = approveMatch[1];
+
     // Récupérer la demande
     const reqData = await db
       .prepare('SELECT * FROM subscription_requests WHERE id = ? AND status = "pending"')
       .bind(requestId)
       .first();
-    if (!reqData) return new Response('Not Found', { status: 404 });
+    if (!reqData) {
+      return new Response(JSON.stringify({ error: 'Demande introuvable ou déjà traitée' }), { status: 404 });
+    }
 
-    // Calculer la date d'expiration (par exemple 30 jours pour mensuel, etc.)
+    // Trouver le plan correspondant
     const plan = PLANS.find(p => p.name === reqData.plan_name);
-    if (!plan) return new Response('Plan inconnu', { status: 400 });
+    if (!plan) {
+      return new Response(JSON.stringify({ error: 'Plan inconnu' }), { status: 400 });
+    }
 
+    // Calculer la date d'expiration
     const expires = new Date();
     expires.setMonth(expires.getMonth() + plan.duration_months);
 
     // Insérer l'abonnement actif
     await db
-      .prepare('INSERT INTO subscriptions (user_id, plan_name, display_name, expires_at) VALUES (?, ?, ?, ?)')
+      .prepare(
+        'INSERT INTO subscriptions (user_id, plan_name, display_name, expires_at) VALUES (?, ?, ?, ?)'
+      )
       .bind(reqData.user_id, reqData.plan_name, reqData.display_name, expires.toISOString().split('T')[0])
       .run();
 
-    // Mettre à jour la demande
+    // Mettre à jour le statut de la demande
     await db
       .prepare('UPDATE subscription_requests SET status = "approved", processed_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(requestId)
       .run();
 
-    // Optionnel : notifier l'utilisateur par email
-
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   }
 
-  // POST /admin/subscription-requests/:id/reject (similaire)
-  const matchReject = path.match(/^\/admin\/subscription-requests\/(\d+)\/reject$/);
-  if (matchReject && request.method === 'POST') {
-    const requestId = matchReject[1];
+  // POST /admin/subscription-requests/:id/reject (optionnel)
+  const rejectMatch = path.match(/^\/admin\/subscription-requests\/(\d+)\/reject$/);
+  if (rejectMatch && request.method === 'POST') {
+    const requestId = rejectMatch[1];
     await db
       .prepare('UPDATE subscription_requests SET status = "rejected", processed_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(requestId)
