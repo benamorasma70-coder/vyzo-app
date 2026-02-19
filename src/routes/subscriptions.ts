@@ -1,10 +1,11 @@
 import { verifyToken } from '../utils/auth';
+import { Resend } from 'resend';
 
 const PLANS = [
   { id: 'free', name: 'free', display_name: 'Gratuit', price_monthly: 0, duration_months: 1, features: '[]' },
-  { id: 'monthly', name: 'monthly', display_name: 'Mensuel', price_monthly: 10, duration_months: 1, features: '[]' },
-  { id: 'semester', name: 'semester', display_name: 'Semestriel', price_monthly: 8, duration_months: 6, features: '[]' },
-  { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 6, duration_months: 12, features: '[]' },
+  { id: 'monthly', name: 'monthly', display_name: 'Mensuel', price_monthly: 5000, duration_months: 1, features: '[]' },
+  { id: 'semester', name: 'semester', display_name: 'Semestriel', price_monthly: 4000, duration_months: 6, features: '[]' },
+  { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 3000, duration_months: 12, features: '[]' },
 ];
 
 export async function handleSubscriptions(request: Request, db: D1Database, env: any): Promise<Response> {
@@ -22,7 +23,7 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
     return new Response(JSON.stringify(PLANS), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  // POST /subscriptions/request (créer une demande)
+  // POST /subscriptions/request (créer une demande d'abonnement)
   if (path === '/subscriptions/request' && request.method === 'POST') {
     const body = await request.json();
     const { planId } = body;
@@ -50,21 +51,15 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
     if (env.RESEND_API_KEY && env.ADMIN_EMAIL) {
       try {
         const user = await db.prepare('SELECT email FROM users WHERE id = ?').bind(payload.userId).first();
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: 'noreply@vyzo.app',
-            to: env.ADMIN_EMAIL,
-            subject: 'Nouvelle demande d\'abonnement',
-            text: `L'utilisateur ${user?.email || payload.userId} a demandé le plan "${plan.display_name}".`,
-          }),
+        const resend = new Resend(env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: 'noreply@vyzo.app', // Remplacez par un domaine vérifié dans Resend
+          to: env.ADMIN_EMAIL,
+          subject: 'Nouvelle demande d\'abonnement',
+          html: `<p>L'utilisateur <strong>${user?.email || payload.userId}</strong> a demandé le plan <strong>${plan.display_name}</strong>.</p>`,
         });
-      } catch (e) {
-        console.error('Erreur envoi email admin:', e);
+      } catch (error) {
+        console.error('Erreur lors de l\'envoi de l\'email à l\'admin :', error);
         // Ne pas bloquer la demande
       }
     }
