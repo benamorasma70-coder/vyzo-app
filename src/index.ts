@@ -41,8 +41,8 @@ export default {
         response = await handleDeliveries(request, env.DB);
       } else if (path.startsWith('/dashboard')) {
         response = await handleDashboard(request, env.DB);
-      } else if (path.startsWith('/admin')) {   // ← nouvelle route
-        response = await handleAdmin(request, env.DB);
+      } else if (path.startsWith('/admin')) {
+        response = await handleAdmin(request, env.DB, env); // ← env ajouté
       } else {
         response = new Response('Not Found', { status: 404 });
       }
