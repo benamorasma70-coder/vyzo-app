@@ -8,7 +8,7 @@ const PLANS = [
   { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 6, duration_months: 12 },
 ];
 
-export async function handleAdmin(request: Request, db: D1Database): Promise<Response> {
+export async function handleAdmin(request: Request, db: D1Database, env: any): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) return new Response('Unauthorized', { status: 401 });
   const token = authHeader.split(' ')[1];
@@ -63,13 +63,14 @@ export async function handleAdmin(request: Request, db: D1Database): Promise<Res
     // Calculer la date d'expiration
     const expires = new Date();
     expires.setMonth(expires.getMonth() + plan.duration_months);
+    const expiresAt = expires.toISOString().split('T')[0];
 
     // Insérer l'abonnement actif
     await db
       .prepare(
         'INSERT INTO subscriptions (user_id, plan_name, display_name, expires_at) VALUES (?, ?, ?, ?)'
       )
-      .bind(reqData.user_id, reqData.plan_name, reqData.display_name, expires.toISOString().split('T')[0])
+      .bind(reqData.user_id, reqData.plan_name, reqData.display_name, expiresAt)
       .run();
 
     // Mettre à jour le statut de la demande
@@ -78,10 +79,35 @@ export async function handleAdmin(request: Request, db: D1Database): Promise<Res
       .bind(requestId)
       .run();
 
+    // Récupérer l'email de l'utilisateur pour l'informer
+    const userInfo = await db.prepare('SELECT email FROM users WHERE id = ?').bind(reqData.user_id).first();
+
+    // Envoyer un email à l'utilisateur (si configuré)
+    if (userInfo && env.RESEND_API_KEY) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'noreply@vyzo.app',
+            to: userInfo.email,
+            subject: 'Votre abonnement a été activé',
+            text: `Bonjour,\n\nVotre demande d'abonnement au plan "${reqData.display_name}" a été approuvée.\nVotre abonnement est actif jusqu'au ${new Date(expires).toLocaleDateString()}.`,
+          }),
+        });
+      } catch (e) {
+        console.error('Erreur envoi email utilisateur:', e);
+        // Ne pas bloquer la réponse
+      }
+    }
+
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   }
 
-  // POST /admin/subscription-requests/:id/reject (optionnel)
+  // POST /admin/subscription-requests/:id/reject
   const rejectMatch = path.match(/^\/admin\/subscription-requests\/(\d+)\/reject$/);
   if (rejectMatch && request.method === 'POST') {
     const requestId = rejectMatch[1];
@@ -89,6 +115,36 @@ export async function handleAdmin(request: Request, db: D1Database): Promise<Res
       .prepare('UPDATE subscription_requests SET status = "rejected", processed_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(requestId)
       .run();
+
+    // Optionnel : envoyer un email à l'utilisateur pour l'informer du rejet
+    // Récupérer la demande pour obtenir l'utilisateur et le plan
+    const reqData = await db
+      .prepare('SELECT user_id, display_name FROM subscription_requests WHERE id = ?')
+      .bind(requestId)
+      .first();
+    if (reqData) {
+      const userInfo = await db.prepare('SELECT email FROM users WHERE id = ?').bind(reqData.user_id).first();
+      if (userInfo && env.RESEND_API_KEY) {
+        try {
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: 'noreply@vyzo.app',
+              to: userInfo.email,
+              subject: 'Votre demande d\'abonnement',
+              text: `Bonjour,\n\nVotre demande d'abonnement au plan "${reqData.display_name}" a été malheureusement rejetée.\nVeuillez contacter l'administrateur pour plus d'informations.`,
+            }),
+          });
+        } catch (e) {
+          console.error('Erreur envoi email rejet:', e);
+        }
+      }
+    }
+
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   }
 
