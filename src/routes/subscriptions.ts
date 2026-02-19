@@ -2,9 +2,9 @@ import { verifyToken } from '../utils/auth';
 
 const PLANS = [
   { id: 'free', name: 'free', display_name: 'Gratuit', price_monthly: 0, duration_months: 1, features: '[]' },
-  { id: 'monthly', name: 'monthly', display_name: 'Mensuel', price_monthly: 5000, duration_months: 1, features: '[]' },
-  { id: 'semester', name: 'semester', display_name: 'Semestriel', price_monthly: 4000, duration_months: 6, features: '[]' },
-  { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 3000, duration_months: 12, features: '[]' },
+  { id: 'monthly', name: 'monthly', display_name: 'Mensuel', price_monthly: 10, duration_months: 1, features: '[]' },
+  { id: 'semester', name: 'semester', display_name: 'Semestriel', price_monthly: 8, duration_months: 6, features: '[]' },
+  { id: 'yearly', name: 'yearly', display_name: 'Annuel', price_monthly: 6, duration_months: 12, features: '[]' },
 ];
 
 export async function handleSubscriptions(request: Request, db: D1Database, env: any): Promise<Response> {
@@ -96,3 +96,4 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
 
   return new Response('Not Found', { status: 404 });
 }
+
