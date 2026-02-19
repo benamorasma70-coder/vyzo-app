@@ -17,12 +17,12 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
   const url = new URL(request.url);
   const path = url.pathname;
 
-  // GET /subscriptions/plans (public, mais on garde l'auth pour cohérence)
+  // GET /subscriptions/plans
   if (path === '/subscriptions/plans' && request.method === 'GET') {
     return new Response(JSON.stringify(PLANS), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  // POST /subscriptions/request (créer une demande d'abonnement)
+  // POST /subscriptions/request - créer une demande d'abonnement
   if (path === '/subscriptions/request' && request.method === 'POST') {
     const body = await request.json();
     const { planId } = body;
@@ -46,10 +46,12 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
       .bind(payload.userId, plan.name, plan.display_name)
       .run();
 
-    // Notifier l'admin par email (si configuré)
-    if (env.RESEND_API_KEY) {
+    // Récupérer l'email de l'utilisateur pour notifier l'admin
+    const user = await db.prepare('SELECT email FROM users WHERE id = ?').bind(payload.userId).first();
+
+    // Notifier l'admin par email si configuré
+    if (env.ADMIN_EMAIL && env.RESEND_API_KEY && user) {
       try {
-        const adminEmail = 'admin@vyzo.app'; // À remplacer ou à récupérer depuis une variable d'env
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -58,13 +60,13 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
           },
           body: JSON.stringify({
             from: 'noreply@vyzo.app',
-            to: adminEmail,
+            to: env.ADMIN_EMAIL,
             subject: 'Nouvelle demande d\'abonnement',
-            text: `Utilisateur ${payload.userId} a demandé le plan ${plan.display_name}.`,
+            text: `L'utilisateur ${user.email} a demandé le plan "${plan.display_name}".`,
           }),
         });
       } catch (e) {
-        console.error('Erreur envoi email:', e);
+        console.error('Erreur envoi email admin:', e);
         // Ne pas bloquer la demande
       }
     }
@@ -72,7 +74,7 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
     return new Response(JSON.stringify({ success: true }), { status: 201 });
   }
 
-  // GET /subscriptions/current (abonnement actif) - reste inchangé
+  // GET /subscriptions/current - abonnement actif
   if (path === '/subscriptions/current' && request.method === 'GET') {
     const sub = await db
       .prepare('SELECT plan_name, display_name, expires_at FROM subscriptions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
@@ -92,8 +94,5 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
     );
   }
 
-  // Note : la route /subscribe est supprimée (ou désactivée)
-
   return new Response('Not Found', { status: 404 });
 }
-
