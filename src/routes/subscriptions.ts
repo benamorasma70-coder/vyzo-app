@@ -22,7 +22,7 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
     return new Response(JSON.stringify(PLANS), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  // POST /subscriptions/request (création d'une demande)
+  // POST /subscriptions/request (créer une demande)
   if (path === '/subscriptions/request' && request.method === 'POST') {
     const body = await request.json();
     const { planId } = body;
@@ -47,7 +47,7 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
       .run();
 
     // Notifier l'admin par email (si configuré)
-    if (env.ADMIN_EMAIL && env.RESEND_API_KEY) {
+    if (env.RESEND_API_KEY && env.ADMIN_EMAIL) {
       try {
         const user = await db.prepare('SELECT email FROM users WHERE id = ?').bind(payload.userId).first();
         await fetch('https://api.resend.com/emails', {
@@ -65,6 +65,7 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
         });
       } catch (e) {
         console.error('Erreur envoi email admin:', e);
+        // Ne pas bloquer la demande
       }
     }
 
@@ -93,4 +94,3 @@ export async function handleSubscriptions(request: Request, db: D1Database, env:
 
   return new Response('Not Found', { status: 404 });
 }
-
