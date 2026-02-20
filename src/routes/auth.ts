@@ -20,7 +20,7 @@ const jsonResponse = (data: any, status = 200) => {
   });
 };
 
-export async function handleAuth(request: Request, db: D1Database): Promise<Response> {
+export async function handleAuth(request: Request, db: D1Database, env: any): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
 
@@ -53,12 +53,46 @@ export async function handleAuth(request: Request, db: D1Database): Promise<Resp
       'INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)'
     ).bind(email, token, expiresAt.toISOString()).run();
 
-    // Construire le lien de réinitialisation (à adapter avec votre frontend URL)
-    const resetLink = `${url.origin}/reset-password?token=${token}`; // url.origin peut être le domaine de l'API, à ajuster
+    // Construire le lien de réinitialisation vers le FRONTEND (variable d'environnement)
+    const FRONTEND_URL = env.FRONTEND_URL; // ex: https://mon-projet.pages.dev
+    const resetLink = `${FRONTEND_URL}/reset-password?token=${token}`;
 
-    // Ici, idéalement vous enverriez un email via un service externe.
-    // Pour l'exemple, on simule l'envoi en renvoyant le lien dans la réponse (à retirer en production)
-    console.log(`Lien de réinitialisation : ${resetLink}`);
+    // Appeler le worker d'envoi d'email (Resend)
+    const EMAIL_WORKER_URL = env.EMAIL_WORKER_URL;
+    const EMAIL_WORKER_TOKEN = env.EMAIL_WORKER_TOKEN;
+
+    const emailResponse = await fetch(EMAIL_WORKER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${EMAIL_WORKER_TOKEN}`,
+      },
+      body: JSON.stringify({
+        to: email,
+        subject: 'Réinitialisation de votre mot de passe',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #6c8dff;">Réinitialisation du mot de passe</h2>
+            <p>Bonjour,</p>
+            <p>Vous avez demandé la réinitialisation de votre mot de passe. Cliquez sur le lien ci-dessous pour procéder :</p>
+            <p style="margin: 30px 0;">
+              <a href="${resetLink}" style="background: #6c8dff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">
+                Réinitialiser mon mot de passe
+              </a>
+            </p>
+            <p>Ou copiez ce lien : <br> <a href="${resetLink}">${resetLink}</a></p>
+            <p>Ce lien est valable 1 heure.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 13px;">VYZO - Gestion commerciale</p>
+          </div>
+        `,
+      }),
+    });
+
+    if (!emailResponse.ok) {
+      // Ne pas divulguer l'échec à l'utilisateur, mais loguer l'erreur
+      console.error("Échec de l'envoi d'email pour", email, await emailResponse.text());
+    }
 
     return jsonResponse({ message: 'Si cet email existe, vous recevrez un lien de réinitialisation.' }, 200);
   }
