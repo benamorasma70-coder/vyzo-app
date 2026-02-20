@@ -6,11 +6,16 @@ import { handleInvoices } from './routes/invoices';
 import { handleQuotes } from './routes/quotes';
 import { handleDeliveries } from './routes/deliveries';
 import { handleDashboard } from './routes/dashboard';
-import { handleAdmin } from './routes/admin'; // ← nouvel import
+import { handleAdmin } from './routes/admin';
 import { getCorsHeaders, handleOptions } from './utils/cors';
 
 export interface Env {
   DB: D1Database;
+  // Variables d'environnement pour l'authentification et l'email
+  FRONTEND_URL: string;
+  EMAIL_WORKER_URL: string;
+  EMAIL_WORKER_TOKEN: string;
+  // Ajoutez ici d'autres variables si nécessaire (JWT_SECRET, etc.)
 }
 
 export default {
@@ -26,7 +31,8 @@ export default {
 
     try {
       if (path.startsWith('/auth')) {
-        response = await handleAuth(request, env.DB);
+        // Passage de l'objet env complet en troisième paramètre
+        response = await handleAuth(request, env.DB, env);
       } else if (path.startsWith('/subscriptions')) {
         response = await handleSubscriptions(request, env.DB, env);
       } else if (path.startsWith('/customers')) {
@@ -42,7 +48,7 @@ export default {
       } else if (path.startsWith('/dashboard')) {
         response = await handleDashboard(request, env.DB);
       } else if (path.startsWith('/admin')) {
-        response = await handleAdmin(request, env.DB, env); // ← env ajouté
+        response = await handleAdmin(request, env.DB, env);
       } else {
         response = new Response('Not Found', { status: 404 });
       }
