@@ -1,22 +1,115 @@
 import { hashPassword, comparePassword, generateToken, verifyToken } from '../utils/auth';
 
+// Fonction utilitaire pour générer un token aléatoire (crypto)
+function generateRandomToken(): string {
+  const buffer = new Uint8Array(32);
+  crypto.getRandomValues(buffer);
+  return Array.from(buffer, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+// Helper pour les réponses JSON avec en-têtes anti-cache
+const jsonResponse = (data: any, status = 200) => {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
+  });
+};
+
 export async function handleAuth(request: Request, db: D1Database): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
 
-  // Helper pour les réponses JSON avec en-têtes anti-cache
-  const jsonResponse = (data: any, status = 200) => {
-    return new Response(JSON.stringify(data), {
-      status,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
-    });
-  };
+  // --- Route: POST /auth/forgot-password ---
+  if (path === '/auth/forgot-password' && request.method === 'POST') {
+    const body = await request.json();
+    const { email } = body;
 
+    if (!email) {
+      return jsonResponse({ error: 'Email requis' }, 400);
+    }
+
+    // Vérifier si l'utilisateur existe
+    const user = await db.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+    if (!user) {
+      // Pour des raisons de sécurité, on renvoie un message neutre
+      return jsonResponse({ message: 'Si cet email existe, vous recevrez un lien de réinitialisation.' }, 200);
+    }
+
+    // Générer un token unique
+    const token = generateRandomToken();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // Expire dans 1 heure
+
+    // Supprimer les anciens tokens pour cet email
+    await db.prepare('DELETE FROM password_resets WHERE email = ?').bind(email).run();
+
+    // Insérer le nouveau token
+    await db.prepare(
+      'INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)'
+    ).bind(email, token, expiresAt.toISOString()).run();
+
+    // Construire le lien de réinitialisation (à adapter avec votre frontend URL)
+    const resetLink = `${url.origin}/reset-password?token=${token}`; // url.origin peut être le domaine de l'API, à ajuster
+
+    // Ici, idéalement vous enverriez un email via un service externe.
+    // Pour l'exemple, on simule l'envoi en renvoyant le lien dans la réponse (à retirer en production)
+    console.log(`Lien de réinitialisation : ${resetLink}`);
+
+    return jsonResponse({ message: 'Si cet email existe, vous recevrez un lien de réinitialisation.' }, 200);
+  }
+
+  // --- Route: POST /auth/reset-password ---
+  if (path === '/auth/reset-password' && request.method === 'POST') {
+    const body = await request.json();
+    const { token, newPassword } = body;
+
+    if (!token || !newPassword) {
+      return jsonResponse({ error: 'Token et nouveau mot de passe requis' }, 400);
+    }
+
+    // Récupérer l'entrée de reset
+    const resetEntry = await db.prepare(
+      'SELECT email, expires_at FROM password_resets WHERE token = ?'
+    ).bind(token).first();
+
+    if (!resetEntry) {
+      return jsonResponse({ error: 'Token invalide' }, 400);
+    }
+
+    // Vérifier l'expiration
+    const now = new Date();
+    const expiresAt = new Date(resetEntry.expires_at);
+    if (now > expiresAt) {
+      await db.prepare('DELETE FROM password_resets WHERE token = ?').bind(token).run();
+      return jsonResponse({ error: 'Token expiré' }, 400);
+    }
+
+    // Récupérer l'utilisateur correspondant
+    const user = await db.prepare('SELECT id FROM users WHERE email = ?').bind(resetEntry.email).first();
+    if (!user) {
+      // Supprimer le token orphelin
+      await db.prepare('DELETE FROM password_resets WHERE token = ?').bind(token).run();
+      return jsonResponse({ error: 'Utilisateur non trouvé' }, 404);
+    }
+
+    // Hasher le nouveau mot de passe
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Mettre à jour le mot de passe
+    await db.prepare('UPDATE users SET password = ? WHERE id = ?').bind(hashedPassword, user.id).run();
+
+    // Supprimer le token utilisé
+    await db.prepare('DELETE FROM password_resets WHERE token = ?').bind(token).run();
+
+    return jsonResponse({ message: 'Mot de passe mis à jour avec succès' }, 200);
+  }
+
+  // --- Routes existantes (register, login, me) ---
   // POST /auth/register
   if (path === '/auth/register' && request.method === 'POST') {
     const body = await request.json();
