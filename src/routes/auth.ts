@@ -54,12 +54,39 @@ export async function handleAuth(request: Request, db: D1Database, env: any): Pr
     ).bind(email, token, expiresAt.toISOString()).run();
 
     // Construire le lien de réinitialisation vers le FRONTEND (variable d'environnement)
-    const FRONTEND_URL = env.FRONTEND_URL; // ex: https://mon-projet.pages.dev
+    const FRONTEND_URL = env.FRONTEND_URL;
     const resetLink = `${FRONTEND_URL}/reset-password?token=${token}`;
 
-    // Appeler le worker d'envoi d'email (Resend)
+    // Appeler le worker d'envoi d'email (Brevo)
     const EMAIL_WORKER_URL = env.EMAIL_WORKER_URL;
     const EMAIL_WORKER_TOKEN = env.EMAIL_WORKER_TOKEN;
+
+    // Contenu HTML de l'email
+    const htmlContent = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #6c8dff;">Réinitialisation du mot de passe</h2>
+        <p>Bonjour,</p>
+        <p>Vous avez demandé la réinitialisation de votre mot de passe. Cliquez sur le lien ci-dessous pour procéder :</p>
+        <p style="margin: 30px 0;">
+          <a href="${resetLink}" style="background: #6c8dff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">
+            Réinitialiser mon mot de passe
+          </a>
+        </p>
+        <p>Ou copiez ce lien : <br> <a href="${resetLink}">${resetLink}</a></p>
+        <p>Ce lien est valable 1 heure.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #6b7280; font-size: 13px;">VYZO - Gestion commerciale</p>
+      </div>
+    `;
+
+    const bodyToSend = {
+      to: email,
+      subject: 'Réinitialisation de votre mot de passe',
+      html: htmlContent,
+    };
+
+    // Log du JSON envoyé (visible dans les logs Cloudflare)
+    console.log('📤 Envoi au worker email :', JSON.stringify(bodyToSend));
 
     const emailResponse = await fetch(EMAIL_WORKER_URL, {
       method: 'POST',
@@ -67,31 +94,15 @@ export async function handleAuth(request: Request, db: D1Database, env: any): Pr
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${EMAIL_WORKER_TOKEN}`,
       },
-      body: JSON.stringify({
-        to: email,
-        subject: 'Réinitialisation de votre mot de passe',
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #6c8dff;">Réinitialisation du mot de passe</h2>
-            <p>Bonjour,</p>
-            <p>Vous avez demandé la réinitialisation de votre mot de passe. Cliquez sur le lien ci-dessous pour procéder :</p>
-            <p style="margin: 30px 0;">
-              <a href="${resetLink}" style="background: #6c8dff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">
-                Réinitialiser mon mot de passe
-              </a>
-            </p>
-            <p>Ou copiez ce lien : <br> <a href="${resetLink}">${resetLink}</a></p>
-            <p>Ce lien est valable 1 heure.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-            <p style="color: #6b7280; font-size: 13px;">VYZO - Gestion commerciale</p>
-          </div>
-        `,
-      }),
+      body: JSON.stringify(bodyToSend),
     });
+
+    const responseText = await emailResponse.text();
+    console.log('📥 Réponse du worker email :', responseText);
 
     if (!emailResponse.ok) {
       // Ne pas divulguer l'échec à l'utilisateur, mais loguer l'erreur
-      console.error("Échec de l'envoi d'email pour", email, await emailResponse.text());
+      console.error("❌ Échec de l'envoi d'email pour", email, responseText);
     }
 
     return jsonResponse({ message: 'Si cet email existe, vous recevrez un lien de réinitialisation.' }, 200);
