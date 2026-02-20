@@ -8,3 +8,8 @@ binding = "DB"
 database_name = "vyzo-db"
 database_id = "e440018d-5836-442a-af04-0986da128916"  # Remplacer après création
 
+[vars]
+FRONTEND_URL = "https://vyzo-saas.pages.dev"
+EMAIL_WORKER_URL = "https://vyzo-email-resend.benamorasma70.workers.dev"
+
+
